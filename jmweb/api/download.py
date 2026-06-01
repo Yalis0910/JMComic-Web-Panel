@@ -15,11 +15,13 @@ def _build_option(option_path: str = None, download_type: str = "folder"):
     option = JmOption.from_file(config_path)
 
     if download_type == "zip":
-        option.plugins["after_album"] = [
+        option.plugins.src_dict["after_album"] = [
             {
                 "plugin": "zip",
                 "kwargs": {
+                    "filename_rule": "Atitle",
                     "suffix": "zip",
+                    "zip_dir": option.dir_rule.base_dir,
                     "delete_original_file": True,
                 },
             }

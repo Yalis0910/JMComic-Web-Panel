@@ -49,7 +49,7 @@ const Components = {
     container.innerHTML = `
       <div class="detail-frame">
         <div class="detail-cover">
-          <span class="detail-cover-char">${escapeHtml(album.title).charAt(0) || '?'}</span>
+          ${album.cover_url ? `<img class="detail-cover-img" src="${escapeHtml(album.cover_url)}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><span class="detail-cover-char" style="display:none;">${escapeHtml(album.title).charAt(0) || '?'}</span>` : `<span class="detail-cover-char">${escapeHtml(album.title).charAt(0) || '?'}</span>`}
         </div>
         <div class="detail-info">
           <h2>${escapeHtml(album.title)}</h2>

@@ -6,9 +6,29 @@ from jmweb.utils.progress import manager
 router = APIRouter(tags=["download"])
 
 
-def _do_download(task_id: str, album_id: str, option_path: str = None):
+def _build_option(option_path: str = None, download_type: str = "folder"):
+    if option_path:
+        return JmOption.from_file(option_path)
+
+    option = JmOption.default()
+
+    if download_type == "zip":
+        option.plugins["after_album"] = [
+            {
+                "plugin": "zip",
+                "kwargs": {
+                    "suffix": "zip",
+                    "delete_original_file": True,
+                },
+            }
+        ]
+
+    return option
+
+
+def _do_download(task_id: str, album_id: str, option_path: str = None, download_type: str = "folder"):
     try:
-        option = JmOption.from_file(option_path) if option_path else JmOption.default()
+        option = _build_option(option_path, download_type)
 
         def callback(album, dler):
             manager.complete_task(task_id)
@@ -22,13 +42,18 @@ def _do_download(task_id: str, album_id: str, option_path: str = None):
 async def download_album_endpoint(
     album_id: str = Body(...),
     option_path: str = Body(None),
+    download_type: str = Body("folder"),
 ):
+    if download_type not in ("folder", "zip"):
+        raise HTTPException(status_code=400, detail="download_type 必须是 folder 或 zip")
+
     task = manager.create_task(album_id)
     task.status = "running"
+    task.download_type = download_type
 
     t = threading.Thread(
         target=_do_download,
-        args=(task.task_id, album_id, option_path),
+        args=(task.task_id, album_id, option_path, download_type),
         daemon=True,
     )
     task.thread = t
@@ -36,8 +61,8 @@ async def download_album_endpoint(
 
     return {
         "code": 0,
-        "data": {"task_id": task.task_id, "album_id": album_id},
-        "message": "下载任务已创建",
+        "data": {"task_id": task.task_id, "album_id": album_id, "download_type": download_type},
+        "message": f"下载任务已创建（{'压缩包' if download_type == 'zip' else '文件夹'}）",
     }
 
 
@@ -57,6 +82,7 @@ async def get_download_status(task_id: str):
             "completed_count": task.completed_count,
             "total_count": task.total_count,
             "error": task.error,
+            "download_type": task.download_type,
         },
         "message": "success",
     }

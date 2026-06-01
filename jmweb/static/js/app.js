@@ -3,14 +3,14 @@ let state = { isLoggedIn: false, username: '' };
 
 function navigateTo(page, param) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.sidebar li').forEach(l => l.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
   currentPage = page;
   const pageEl = document.getElementById(`page-${page}`);
   if (pageEl) pageEl.classList.add('active');
 
-  const sidebarItem = document.querySelector(`.sidebar li[data-page="${page}"]`);
-  if (sidebarItem) sidebarItem.classList.add('active');
+  const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
+  if (navItem) navItem.classList.add('active');
 
   if (page === 'ranking') loadRanking('day');
   if (page === 'downloads') loadDownloadTasks();
@@ -19,8 +19,8 @@ function navigateTo(page, param) {
   if (page === 'dashboard') loadDashboard();
 }
 
-document.querySelectorAll('.sidebar li').forEach(li => {
-  li.addEventListener('click', () => navigateTo(li.dataset.page));
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
 
 document.getElementById('searchBtn').addEventListener('click', () => {
@@ -49,7 +49,7 @@ function doSearch(query, page) {
     Components.renderPagination(data.total, data.page_count, page, 'searchPagination',
       `doSearch('${query}',`);
   }).catch(err => {
-    document.getElementById('searchGrid').innerHTML = `<p style="color:#f04040;text-align:center;padding:40px;">搜索失败：${err.message}</p>`;
+    document.getElementById('searchGrid').innerHTML = `<p class="error-state">搜索失败：${err.message}</p>`;
   });
 }
 
@@ -60,42 +60,50 @@ document.addEventListener('change', (e) => {
 });
 
 function loadRanking(type, page = 1) {
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  document.querySelector(`.tab-btn[data-type="${type}"]`)?.classList.add('active');
+  document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.rank-tab[data-type="${type}"]`)?.classList.add('active');
 
   API.getRanking(type, page).then(data => {
     Components.renderAlbumGrid(data.albums, 'rankingGrid');
     Components.renderPagination(data.total, data.page_count, page, 'rankingPagination',
       `loadRanking('${type}',`);
   }).catch(err => {
-    document.getElementById('rankingGrid').innerHTML = `<p style="color:#f04040;text-align:center;padding:40px;">加载失败：${err.message}</p>`;
+    document.getElementById('rankingGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
 }
 
-document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => loadRanking(btn.dataset.type));
+document.querySelectorAll('.rank-tab').forEach(tab => {
+  tab.addEventListener('click', () => loadRanking(tab.dataset.type));
 });
 
 function showAlbumDetail(albumId) {
   navigateTo('detail');
-  document.getElementById('albumDetail').innerHTML = '<p style="text-align:center;padding:40px;color:#808090;">加载中...</p>';
+  document.getElementById('albumDetail').innerHTML = '<p class="empty-state">加载中...</p>';
 
   API.getAlbum(albumId).then(data => {
     Components.renderAlbumDetail(data);
   }).catch(err => {
-    document.getElementById('albumDetail').innerHTML = `<p style="color:#f04040;text-align:center;padding:40px;">加载失败：${err.message}</p>`;
+    document.getElementById('albumDetail').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
 }
 
 function downloadAlbum(albumId) {
-  API.startDownload(albumId).then(data => {
-    alert(`下载任务已创建！任务ID: ${data.task_id}`);
+  API.startDownload(albumId, null, 'folder').then(data => {
+    showToast(`任务已创建 #${data.task_id}`);
     loadDownloadTasks();
-  }).catch(err => alert(`创建下载任务失败：${err.message}`));
+  }).catch(err => showToast(`创建失败：${err.message}`, true));
+}
+
+function downloadAlbumWithFormat(albumId) {
+  const fmt = document.getElementById('downloadFormatSelect')?.value || 'folder';
+  API.startDownload(albumId, null, fmt).then(data => {
+    showToast(`任务已创建 #${data.task_id}`);
+    loadDownloadTasks();
+  }).catch(err => showToast(`创建失败：${err.message}`, true));
 }
 
 function downloadPhoto(photoId) {
-  alert(`章节下载功能将在后续版本完善，当前请直接下载整个本子`);
+  showToast('章节下载功能将在后续版本完善');
 }
 
 function cancelDownload(taskId) {
@@ -107,13 +115,29 @@ function addFav(albumId) {
     showLoginModal();
     return;
   }
-  API.addFavorite(albumId).then(() => alert('已添加到收藏')).catch(e => alert('收藏失败：' + e.message));
+  API.addFavorite(albumId).then(() => showToast('已添加到收藏')).catch(e => showToast('收藏失败：' + e.message, true));
+}
+
+function showToast(msg, isError = false) {
+  const existing = document.querySelector('.toast-msg');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-msg';
+  toast.style.cssText = `position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 24px;background:${isError ? 'var(--error)' : 'var(--ink)'};color:var(--cream);border-radius:8px;font-size:14px;z-index:2000;animation:fadeIn 0.3s;`;
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
 }
 
 document.getElementById('startDownloadBtn')?.addEventListener('click', () => {
   const albumId = document.getElementById('downloadAlbumId').value.trim();
-  if (!albumId) { alert('请输入本子 ID'); return; }
-  downloadAlbum(albumId);
+  if (!albumId) { showToast('请输入漫画 ID', true); return; }
+  const fmt = document.getElementById('downloadFormatSelectGlobal')?.value || 'folder';
+  API.startDownload(albumId, null, fmt).then(data => {
+    showToast(`任务已创建 #${data.task_id}`);
+    loadDownloadTasks();
+  }).catch(err => showToast(`创建失败：${err.message}`, true));
 });
 
 function loadDownloadTasks() {
@@ -131,9 +155,9 @@ function loadFavorites(page) {
 
   if (!state.isLoggedIn) {
     statusEl.innerHTML = `
-      <div class="fav-status-bar">
-        <span class="fav-login-prompt">请先登录后查看收藏</span>
-        <span class="fav-login-btn" onclick="showLoginModal()">去登录 &rarr;</span>
+      <div class="fav-prompt">
+        <span class="fav-prompt-text">请先登录后查看收藏</span>
+        <span class="fav-prompt-btn" onclick="showLoginModal()">去登录 →</span>
       </div>`;
     document.getElementById('favoriteGrid').innerHTML = '';
     document.getElementById('favoritePagination').innerHTML = '';
@@ -146,7 +170,7 @@ function loadFavorites(page) {
     Components.renderPagination(data.total, data.page_count, page, 'favoritePagination',
       'loadFavorites(');
   }).catch(err => {
-    document.getElementById('favoriteGrid').innerHTML = `<p style="color:#f04040;text-align:center;padding:40px;">加载失败：${err.message}</p>`;
+    document.getElementById('favoriteGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
 }
 
@@ -163,27 +187,24 @@ function loadConfig() {
 document.getElementById('saveConfigBtn')?.addEventListener('click', () => {
   try {
     const config = JSON.parse(document.getElementById('configEditor').value);
-    API.updateConfig(config).then(() => alert('配置已保存'));
+    API.updateConfig(config).then(() => showToast('配置已保存'));
   } catch (e) {
-    alert('配置格式错误：' + e.message);
+    showToast('配置格式错误：' + e.message, true);
   }
 });
 
 function loadDashboard() {
   const tags = ['全彩', '無修正', '中文', '同人', '單行本'];
   document.getElementById('quickTags').innerHTML = tags.map(t =>
-    `<span class="quick-tag" onclick="document.getElementById('searchInput').value='${t}';document.getElementById('searchBtn').click();">${t}</span>`
+    `<span class="tag-item" onclick="document.getElementById('searchInput').value='${t}';document.getElementById('searchBtn').click();">${t}</span>`
   ).join('');
 }
 
 function goBack() {
-  const detailPage = document.getElementById('page-detail');
-  if (detailPage.classList.contains('active')) {
+  if (currentPage === 'detail' || currentPage === 'search') {
     navigateTo('dashboard');
   }
 }
-
-/* ---- Login ---- */
 
 function showLoginModal() {
   document.getElementById('loginModal').style.display = 'flex';
@@ -215,10 +236,11 @@ document.getElementById('loginConfirmBtn').addEventListener('click', () => {
     state.username = data.username;
     updateLoginStatus();
     hideLoginModal();
+    showToast('登录成功');
   }).catch(err => {
     document.getElementById('loginError').textContent = err.message || '登录失败';
   }).finally(() => {
-    btn.textContent = '登录';
+    btn.textContent = '确认登录';
     btn.disabled = false;
   });
 });
@@ -226,12 +248,14 @@ document.getElementById('loginConfirmBtn').addEventListener('click', () => {
 function updateLoginStatus() {
   const el = document.getElementById('loginStatus');
   if (state.isLoggedIn && state.username) {
-    el.textContent = state.username;
-    el.className = 'login-status logged-in';
+    el.className = 'user-badge logged-in';
+    el.querySelector('.badge-icon').textContent = '●';
+    el.querySelector('.badge-text').textContent = state.username;
     el.onclick = showLogoutConfirm;
   } else {
-    el.textContent = '登录';
-    el.className = 'login-status';
+    el.className = 'user-badge';
+    el.querySelector('.badge-icon').textContent = '○';
+    el.querySelector('.badge-text').textContent = '登录';
     el.onclick = showLoginModal;
   }
 }
@@ -242,6 +266,7 @@ function showLogoutConfirm() {
       state.isLoggedIn = false;
       state.username = '';
       updateLoginStatus();
+      showToast('已登出');
       if (currentPage === 'favorites') loadFavorites(1);
     }).catch(() => {
       state.isLoggedIn = false;

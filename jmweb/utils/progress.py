@@ -16,6 +16,7 @@ class DownloadTask:
     error: Optional[str] = None
     created_at: float = field(default_factory=time.time)
     thread: Optional[threading.Thread] = None
+    download_type: str = "folder"
 
 
 class DownloadManager:

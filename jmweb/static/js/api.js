@@ -32,10 +32,10 @@ const API = {
     return this.request(`/category?page=${page}&time=${time}&order_by=${orderBy}&category=${category}`);
   },
 
-  startDownload(albumId, optionPath = null) {
+  startDownload(albumId, optionPath = null, downloadType = 'folder') {
     return this.request('/download/album', {
       method: 'POST',
-      body: JSON.stringify({ album_id: albumId, option_path: optionPath }),
+      body: JSON.stringify({ album_id: albumId, option_path: optionPath, download_type: downloadType }),
     });
   },
   getDownloadStatus(taskId) { return this.request(`/download/status/${taskId}`); },

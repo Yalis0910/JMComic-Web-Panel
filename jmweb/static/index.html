@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JMComic 管理面板</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="header-left">
+        <h1 class="logo">JMComic 管理面板</h1>
+      </div>
+      <div class="header-center">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="搜索本子、作者、标签..." />
+          <button id="searchBtn">搜索</button>
+        </div>
+      </div>
+      <div class="header-right">
+        <span id="loginStatus" class="login-status" onclick="showLoginModal()">登录</span>
+        <span id="statusBadge" class="status-badge">&#x25CF; 已连接</span>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <nav class="sidebar">
+        <ul>
+          <li class="active" data-page="dashboard">&#x1F4CA; 仪表盘</li>
+          <li data-page="ranking">&#x1F3C6; 排行榜</li>
+          <li data-page="search">&#x1F50D; 搜索</li>
+          <li data-page="downloads">&#x1F4E5; 下载管理</li>
+          <li data-page="favorites">&#x2764;&#xFE0F; 收藏</li>
+          <li data-page="settings">&#x2699;&#xFE0F; 设置</li>
+        </ul>
+      </nav>
+
+      <main class="content" id="mainContent">
+        <div id="page-dashboard" class="page active">
+          <h2>仪表盘</h2>
+          <div class="dashboard-grid">
+            <div class="card" onclick="navigateTo('ranking', 'day')">
+              <h3>日排行</h3>
+              <p>今日热门本子</p>
+            </div>
+            <div class="card" onclick="navigateTo('ranking', 'week')">
+              <h3>周排行</h3>
+              <p>本周热门本子</p>
+            </div>
+            <div class="card" onclick="navigateTo('ranking', 'month')">
+              <h3>月排行</h3>
+              <p>本月热门本子</p>
+            </div>
+            <div class="card" onclick="navigateTo('downloads')">
+              <h3>下载管理</h3>
+              <p>查看下载任务</p>
+            </div>
+          </div>
+          <h3>快速搜索</h3>
+          <div class="quick-tags" id="quickTags"></div>
+        </div>
+
+        <div id="page-ranking" class="page">
+          <h2>排行榜</h2>
+          <div class="tab-bar">
+            <button class="tab-btn active" data-type="day">日排行</button>
+            <button class="tab-btn" data-type="week">周排行</button>
+            <button class="tab-btn" data-type="month">月排行</button>
+          </div>
+          <div class="album-grid" id="rankingGrid"></div>
+          <div class="pagination" id="rankingPagination"></div>
+        </div>
+
+        <div id="page-search" class="page">
+          <h2>搜索结果</h2>
+          <div class="search-filters">
+            <select id="searchType">
+              <option value="all">全部</option>
+              <option value="author">作者</option>
+              <option value="tag">标签</option>
+            </select>
+          </div>
+          <div class="album-grid" id="searchGrid"></div>
+          <div class="pagination" id="searchPagination"></div>
+        </div>
+
+        <div id="page-detail" class="page">
+          <button class="back-btn" onclick="goBack()">&larr; 返回</button>
+          <div id="albumDetail"></div>
+        </div>
+
+        <div id="page-downloads" class="page">
+          <h2>下载管理</h2>
+          <div id="downloadList"></div>
+          <div class="download-input-area">
+            <input type="text" id="downloadAlbumId" placeholder="输入本子 ID..." />
+            <button id="startDownloadBtn">开始下载</button>
+          </div>
+        </div>
+
+        <div id="page-favorites" class="page">
+          <h2>&#x2764;&#xFE0F; 收藏夹</h2>
+          <div id="favoritesStatus"></div>
+          <div class="album-grid" id="favoriteGrid"></div>
+          <div class="pagination" id="favoritePagination"></div>
+        </div>
+
+        <div id="page-settings" class="page">
+          <h2>设置</h2>
+          <div class="settings-form">
+            <h3>客户端配置</h3>
+            <label>客户端类型：
+              <select id="settingClientImpl">
+                <option value="html">网页端 (html)</option>
+                <option value="api">APP端 (api)</option>
+              </select>
+            </label>
+            <label>下载目录：
+              <input type="text" id="settingBaseDir" placeholder="D:/jmcomic/download" />
+            </label>
+            <label>目录规则：
+              <input type="text" id="settingDirRule" value="Bd_Aauthor_Atitle" />
+            </label>
+            <label>图片并发数：
+              <input type="number" id="settingImageThread" value="3" min="1" max="20" />
+            </label>
+            <h3>配置文件 (JSON)</h3>
+            <div class="config-file-area">
+              <textarea id="configEditor" rows="15" style="width:100%;font-family:monospace;"></textarea>
+              <button id="saveConfigBtn">保存配置</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 登录弹窗 -->
+  <div id="loginModal" class="modal-overlay" style="display:none;">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>登录禁漫账号</h3>
+        <span class="modal-close" onclick="hideLoginModal()">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>用户名 / 邮箱：</label>
+          <input type="text" id="loginUsername" placeholder="输入用户名或邮箱" />
+        </div>
+        <div class="form-group">
+          <label>密码：</label>
+          <input type="password" id="loginPassword" placeholder="输入密码" />
+        </div>
+        <div class="form-group">
+          <label>客户端类型：</label>
+          <select id="loginImpl">
+            <option value="html">网页端 (html)</option>
+            <option value="api">APP端 (api)</option>
+          </select>
+        </div>
+        <div id="loginError" class="form-error"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="hideLoginModal()">取消</button>
+        <button class="btn btn-primary" id="loginConfirmBtn">登录</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/components.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

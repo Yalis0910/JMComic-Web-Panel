@@ -1,0 +1,68 @@
+from fastapi import APIRouter, HTTPException, Query
+from jmcomic import JmOption
+
+router = APIRouter(tags=["search"])
+
+
+def _get_client():
+    return JmOption.default().new_jm_client()
+
+
+def _format_search_result(page):
+    albums = []
+    for aid, info in page.content:
+        albums.append({
+            "album_id": aid,
+            "title": info.get("name", ""),
+            "tags": info.get("tags", []),
+        })
+    return {
+        "albums": albums,
+        "total": page.total,
+        "page_count": page.page_count,
+        "page_size": page.page_size,
+    }
+
+
+@router.get("/search")
+async def search_album(
+    q: str = Query(..., description="搜索关键词"),
+    page: int = Query(1, ge=1),
+    order_by: str = Query("latest", description="排序: latest/view/like"),
+):
+    try:
+        client = _get_client()
+        result = client.search_site(search_query=q, page=page, order_by=order_by)
+        return {
+            "code": 0,
+            "data": _format_search_result(result),
+            "message": "success",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search/author")
+async def search_author(
+    q: str = Query(...),
+    page: int = Query(1, ge=1),
+):
+    try:
+        client = _get_client()
+        result = client.search_author(search_query=q, page=page)
+        return {"code": 0, "data": _format_search_result(result), "message": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/search/tag")
+async def search_tag(
+    q: str = Query(...),
+    page: int = Query(1, ge=1),
+):
+    try:
+        client = _get_client()
+        result = client.search_tag(search_query=q, page=page)
+        return {"code": 0, "data": _format_search_result(result), "message": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

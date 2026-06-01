@@ -174,23 +174,63 @@ function loadFavorites(page) {
   });
 }
 
+function syncFormToConfig() {
+  const configEditor = document.getElementById('configEditor');
+  let config;
+  try {
+    config = JSON.parse(configEditor.value || '{}');
+  } catch (e) {
+    config = {};
+  }
+  
+  config.client = config.client || {};
+  config.client.impl = document.getElementById('settingClientImpl').value;
+  
+  config.dir_rule = config.dir_rule || {};
+  config.dir_rule.base_dir = document.getElementById('settingBaseDir').value;
+  config.dir_rule.rule = document.getElementById('settingDirRule').value;
+  
+  config.download = config.download || {};
+  config.download.threading = config.download.threading || {};
+  config.download.threading.image = parseInt(document.getElementById('settingImageThread').value) || 3;
+  
+  configEditor.value = JSON.stringify(config, null, 2);
+  return config;
+}
+
+function syncConfigToForm(config) {
+  if (config.client?.impl) {
+    document.getElementById('settingClientImpl').value = config.client.impl;
+  }
+  if (config.dir_rule?.base_dir) {
+    document.getElementById('settingBaseDir').value = config.dir_rule.base_dir;
+  }
+  if (config.dir_rule?.rule) {
+    document.getElementById('settingDirRule').value = config.dir_rule.rule;
+  }
+  if (config.download?.threading?.image) {
+    document.getElementById('settingImageThread').value = config.download.threading.image;
+  }
+}
+
 function loadConfig() {
   API.getConfig().then(config => {
-    document.getElementById('settingClientImpl').value = config.client?.impl || 'html';
-    document.getElementById('settingBaseDir').value = config.dir_rule?.base_dir || '';
-    document.getElementById('settingDirRule').value = config.dir_rule?.rule || 'Bd_Aauthor_Atitle';
-    document.getElementById('settingImageThread').value = config.download?.threading?.image || 3;
+    syncConfigToForm(config);
     document.getElementById('configEditor').value = JSON.stringify(config, null, 2);
   });
 }
 
 document.getElementById('saveConfigBtn')?.addEventListener('click', () => {
   try {
-    const config = JSON.parse(document.getElementById('configEditor').value);
-    API.updateConfig(config).then(() => showToast('配置已保存'));
+    const config = syncFormToConfig();
+    API.updateConfig(config).then(() => showToast('配置已保存')).catch(err => showToast('保存失败：' + err.message, true));
   } catch (e) {
     showToast('配置格式错误：' + e.message, true);
   }
+});
+
+['settingClientImpl', 'settingBaseDir', 'settingDirRule', 'settingImageThread'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', syncFormToConfig);
 });
 
 function loadDashboard() {

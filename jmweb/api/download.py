@@ -2,6 +2,7 @@ import threading
 from fastapi import APIRouter, HTTPException, Body
 from jmcomic import download_album, JmOption
 from jmweb.utils.progress import manager
+from jmweb.api.config import get_config_path
 
 router = APIRouter(tags=["download"])
 
@@ -10,7 +11,8 @@ def _build_option(option_path: str = None, download_type: str = "folder"):
     if option_path:
         return JmOption.from_file(option_path)
 
-    option = JmOption.default()
+    config_path = get_config_path()
+    option = JmOption.from_file(config_path)
 
     if download_type == "zip":
         option.plugins["after_album"] = [

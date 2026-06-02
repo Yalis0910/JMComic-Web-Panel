@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query, Body
-from jmcomic import JmOption
+from jmcomic import JmOption, JmcomicText
 from jmweb.utils.session import session
 
 router = APIRouter(tags=["user"])
@@ -24,6 +24,7 @@ def _format_favorites(page):
             "album_id": aid,
             "title": info.get("name", ""),
             "tags": info.get("tags", []),
+            "cover_url": JmcomicText.get_album_cover_url(aid),
         })
 
     folders = [

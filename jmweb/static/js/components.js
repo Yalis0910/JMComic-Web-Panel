@@ -8,7 +8,13 @@ const Components = {
     container.innerHTML = albums.map(a => `
       <div class="manga-card" onclick="showAlbumDetail('${a.album_id}')">
         <div class="manga-cover">
-          <span class="cover-char">${escapeHtml(a.title).charAt(0) || '?'}</span>
+          ${a.cover_url
+            ? `<img class="cover-img" src="${escapeHtml(a.cover_url)}"
+                  alt="${escapeHtml(a.title)}"
+                  onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+               <span class="cover-char" style="display:none;">${escapeHtml(a.title).charAt(0) || '?'}</span>`
+            : `<span class="cover-char">${escapeHtml(a.title).charAt(0) || '?'}</span>`
+          }
         </div>
         <div class="manga-info">
           <div class="manga-title" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</div>

@@ -357,6 +357,14 @@ body {
   color: var(--paper-dim);
 }
 
+.manga-cover .cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  position: relative;
+  z-index: 1;
+}
+
 .manga-info {
   padding: 12px 14px;
 }

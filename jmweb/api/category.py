@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Query
-from jmcomic import JmOption
+from jmcomic import JmOption, JmcomicText
 
 router = APIRouter(tags=["category"])
 
@@ -15,6 +15,7 @@ def _format_page(page):
             "album_id": aid,
             "title": info.get("name", ""),
             "tags": info.get("tags", []),
+            "cover_url": JmcomicText.get_album_cover_url(aid),
         })
     return {
         "albums": albums,

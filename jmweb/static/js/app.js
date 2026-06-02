@@ -2,6 +2,25 @@ let currentPage = 'dashboard';
 let state = { isLoggedIn: false, username: '' };
 
 function navigateTo(page, param) {
+  const readerScreen = document.getElementById('page-reader');
+  const mainWrapper = document.querySelector('.wrapper');
+
+  if (page === 'reader') {
+    if (readerScreen) {
+      readerScreen.classList.remove('hidden');
+      readerScreen.classList.add('active');
+    }
+    if (mainWrapper) mainWrapper.style.display = 'none';
+    currentPage = 'reader';
+    return;
+  }
+
+  if (currentPage === 'reader' && readerScreen) {
+    readerScreen.classList.add('hidden');
+    readerScreen.classList.remove('active');
+    if (mainWrapper) mainWrapper.style.display = '';
+  }
+
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
 
@@ -85,6 +104,13 @@ function showAlbumDetail(albumId) {
   }).catch(err => {
     document.getElementById('albumDetail').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
+}
+
+function openReader(photoId, albumId, title) {
+  if (!mangaReader) {
+    mangaReader = new MangaReader();
+  }
+  mangaReader.loadImages(photoId, albumId, title);
 }
 
 function downloadAlbum(albumId) {

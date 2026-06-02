@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;900&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/reader.css">
 </head>
 <body>
   <div id="app">
@@ -178,6 +179,63 @@
     </main>
   </div>
 
+  <div id="page-reader" class="reader-screen hidden">
+    <div class="reader-toolbar" id="reader-toolbar">
+      <div class="toolbar-top">
+        <button class="toolbar-btn" id="reader-btn-back" title="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        </button>
+        <span class="toolbar-title" id="reader-toolbar-title">漫画阅读器</span>
+        <div class="toolbar-actions">
+          <button class="toolbar-btn" id="reader-btn-zoom-out" title="缩小">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM13.5 10.5h-6"/></svg>
+          </button>
+          <span class="zoom-level" id="reader-zoom-level">100%</span>
+          <button class="toolbar-btn" id="reader-btn-zoom-in" title="放大">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607zM10.5 7.5v6m3-3h-6"/></svg>
+          </button>
+          <button class="toolbar-btn" id="reader-btn-theme" title="切换主题">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z"/></svg>
+          </button>
+          <button class="toolbar-btn" id="reader-btn-fullscreen" title="全屏">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="reader-container" id="reader-container">
+      <div class="image-list" id="reader-image-list"></div>
+    </div>
+
+    <div class="reader-progress-bar" id="reader-progress-bar">
+      <div class="reader-progress-fill" id="reader-progress-fill"></div>
+      <div class="reader-progress-thumb" id="reader-progress-thumb"></div>
+    </div>
+
+    <div class="reader-bottom-bar">
+      <span class="page-info" id="reader-page-info">1 / 1</span>
+      <button class="toolbar-btn" id="reader-btn-thumbnails" title="缩略图">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="reader-thumbnail-panel hidden" id="reader-thumbnail-panel">
+    <div class="thumbnail-header">
+      <span class="thumbnail-title">缩略图导航</span>
+      <button class="toolbar-btn" id="reader-btn-close-thumbnails">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="thumbnail-grid" id="reader-thumbnail-grid"></div>
+  </div>
+
+  <div class="reader-loading-overlay hidden" id="reader-loading">
+    <div class="loading-spinner"></div>
+    <span class="loading-text">加载中...</span>
+  </div>
+
   <div id="loginModal" class="modal-overlay" style="display:none;">
     <div class="modal-frame">
       <div class="modal-top">
@@ -209,6 +267,16 @@
     </div>
   </div>
 
+  <script src="/static/js/reader/config.js"></script>
+  <script src="/static/js/reader/utils.js"></script>
+  <script src="/static/js/reader/lazy-loader.js"></script>
+  <script src="/static/js/reader/progress.js"></script>
+  <script src="/static/js/reader/zoom.js"></script>
+  <script src="/static/js/reader/toolbar.js"></script>
+  <script src="/static/js/reader/thumbnail.js"></script>
+  <script src="/static/js/reader/keyboard.js"></script>
+  <script src="/static/js/reader/gesture.js"></script>
+  <script src="/static/js/reader/index.js"></script>
   <script src="/static/js/api.js"></script>
   <script src="/static/js/components.js"></script>
   <script src="/static/js/app.js"></script>

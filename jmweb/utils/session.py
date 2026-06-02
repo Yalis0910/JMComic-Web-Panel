@@ -2,11 +2,45 @@ import threading
 import time
 import os
 import json
+import base64
 from typing import Optional, Dict
 from jmcomic import JmOption
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import pad, unpad
 
 
 SESSION_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', 'session.json')
+
+CRYPTO_KEY_FILE = os.path.join(os.path.dirname(__file__), '..', 'data', '.crypto_key')
+
+
+def _load_or_create_crypto_key() -> bytes:
+    try:
+        os.makedirs(os.path.dirname(CRYPTO_KEY_FILE), exist_ok=True)
+        if os.path.exists(CRYPTO_KEY_FILE):
+            with open(CRYPTO_KEY_FILE, 'rb') as f:
+                return f.read()
+        key = os.urandom(32)
+        with open(CRYPTO_KEY_FILE, 'wb') as f:
+            f.write(key)
+        return key
+    except Exception:
+        return os.urandom(32)
+
+
+CRYPTO_KEY = _load_or_create_crypto_key()
+
+
+def _encrypt_password(password: str) -> str:
+    cipher = AES.new(CRYPTO_KEY, AES.MODE_ECB)
+    ct = cipher.encrypt(pad(password.encode('utf-8'), AES.block_size))
+    return base64.b64encode(ct).decode('utf-8')
+
+
+def _decrypt_password(encrypted: str) -> str:
+    cipher = AES.new(CRYPTO_KEY, AES.MODE_ECB)
+    pt = unpad(cipher.decrypt(base64.b64decode(encrypted)), AES.block_size)
+    return pt.decode('utf-8')
 
 
 class SessionManager:
@@ -20,6 +54,7 @@ class SessionManager:
                 cls._instance._client = None
                 cls._instance._option = None
                 cls._instance._username: str = ""
+                cls._instance._password_encrypted: str = ""
                 cls._instance._login_time: float = 0
                 cls._instance._impl: str = "html"
                 cls._instance._try_restore_session()
@@ -42,6 +77,7 @@ class SessionManager:
         self._client = client
         self._option = option
         self._username = username
+        self._password_encrypted = _encrypt_password(password)
         self._login_time = time.time()
         self._impl = impl
 
@@ -51,6 +87,7 @@ class SessionManager:
         self._client = None
         self._option = None
         self._username = ""
+        self._password_encrypted = ""
         self._login_time = 0
         self._impl = "html"
 
@@ -66,11 +103,39 @@ class SessionManager:
             "login_time": self._login_time,
         }
 
+    def refresh_session(self) -> bool:
+        """用保存的密码重新登录，刷新cookie。
+        返回 True 表示刷新成功，False 表示失败（需要用户重新登录）。
+        """
+        if not self._username or not self._password_encrypted:
+            return False
+
+        try:
+            password = _decrypt_password(self._password_encrypted)
+
+            option = JmOption.default()
+            option.client.impl = self._impl
+            client = option.new_jm_client()
+            client.login(username=self._username, password=password)
+
+            self._client = client
+            self._option = option
+            self._login_time = time.time()
+
+            self._save_session()
+
+            print(f"[SessionManager] 已自动刷新登录状态: {self._username}")
+            return True
+        except Exception as e:
+            print(f"[SessionManager] 自动刷新登录失败: {e}")
+            return False
+
     def clear_session(self):
         """当请求返回401时调用，清除本地session"""
         self._client = None
         self._option = None
         self._username = ""
+        self._password_encrypted = ""
         self._login_time = 0
         self._impl = "html"
         self._delete_session()
@@ -85,6 +150,7 @@ class SessionManager:
                 "username": self._username,
                 "impl": self._impl,
                 "cookies": cookies,
+                "password_encrypted": self._password_encrypted,
                 "login_time": self._login_time,
             }
 
@@ -121,6 +187,7 @@ class SessionManager:
             username = session_data.get("username", "")
             impl = session_data.get("impl", "html")
             cookies = session_data.get("cookies", {})
+            password_encrypted = session_data.get("password_encrypted", "")
             login_time = session_data.get("login_time", 0)
 
             if not cookies:
@@ -134,6 +201,7 @@ class SessionManager:
             self._client = client
             self._option = option
             self._username = username
+            self._password_encrypted = password_encrypted
             self._login_time = login_time
             self._impl = impl
 

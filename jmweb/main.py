@@ -41,7 +41,7 @@ async def health():
 
 def start():
     import uvicorn
-    uvicorn.run("jmweb.main:app", host="127.0.0.1", port=8800, reload=True)
+    uvicorn.run("jmweb.main:app", host="0.0.0.0", port=8800, reload=True)
 
 
 if __name__ == "__main__":

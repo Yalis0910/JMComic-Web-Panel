@@ -1,10 +1,11 @@
 let currentPage = 'dashboard';
-let state = { isLoggedIn: false, username: '' };
+let state = { isLoggedIn: false, username: '', searchPage: 1, rankingPage: 1, rankingType: 'day', favPage: 1 };
 let prevTaskStates = {};
 let selectedAlbums = new Set();
 let currentFavAlbums = [];
+let pageStack = [];
 
-function navigateTo(page, param) {
+function navigateTo(page) {
   const readerScreen = document.getElementById('page-reader');
   const mainWrapper = document.querySelector('.wrapper');
 
@@ -33,21 +34,72 @@ function navigateTo(page, param) {
 
   const navItem = document.querySelector(`.nav-item[data-page="${page}"]`);
   if (navItem) navItem.classList.add('active');
+}
 
-  if (page === 'ranking') loadRanking('day');
-  if (page === 'downloads') loadDownloadTasks();
-  if (page === 'favorites') loadFavorites(1);
-  if (page === 'settings') loadConfig();
-  if (page === 'dashboard') loadDashboard();
+function collectPageState() {
+  switch (currentPage) {
+    case 'search':
+      return {
+        query: state.searchQuery,
+        type: document.getElementById('searchType')?.value,
+        orderBy: document.getElementById('searchOrderBy')?.value,
+        time: document.getElementById('searchTime')?.value,
+      };
+    case 'ranking':
+      return {
+        type: document.querySelector('.rank-tab.active')?.dataset?.type || 'day',
+      };
+    case 'favorites':
+      return { folderId: currentFavFolderId };
+    default:
+      return {};
+  }
+}
+
+function restorePageState(page, extra, pageNum) {
+  switch (page) {
+    case 'search':
+      if (extra?.type) document.getElementById('searchType').value = extra.type;
+      if (extra?.orderBy) document.getElementById('searchOrderBy').value = extra.orderBy;
+      if (extra?.time) document.getElementById('searchTime').value = extra.time;
+      doSearch(extra?.query || state.searchQuery, pageNum || 1);
+      break;
+    case 'ranking':
+      state.rankingType = extra?.type || 'day';
+      state.rankingPage = pageNum || 1;
+      loadRanking(state.rankingType, state.rankingPage);
+      break;
+    case 'favorites':
+      if (extra?.folderId) currentFavFolderId = extra.folderId;
+      state.favPage = pageNum || 1;
+      loadFavorites(state.favPage);
+      break;
+    case 'downloads':
+      loadDownloadTasks();
+      break;
+    case 'settings':
+      loadConfig();
+      break;
+    case 'dashboard':
+      loadDashboard();
+      break;
+  }
 }
 
 document.querySelectorAll('.nav-item').forEach(item => {
-  item.addEventListener('click', () => navigateTo(item.dataset.page));
+  item.addEventListener('click', () => {
+    const target = item.dataset.page;
+    if (target === currentPage) return;
+    pageStack = [];
+    navigateTo(target);
+    restorePageState(target, {}, 1);
+  });
 });
 
 document.getElementById('searchBtn').addEventListener('click', () => {
   const query = document.getElementById('searchInput').value.trim();
   if (!query) return;
+  pageStack.push({ page: currentPage, extra: collectPageState(), pageNum: state.searchPage });
   navigateTo('search');
   doSearch(query, 1);
 });
@@ -79,11 +131,14 @@ function doSearch(query, page) {
 
 document.addEventListener('change', (e) => {
   if ((e.target.id === 'searchType' || e.target.id === 'searchOrderBy' || e.target.id === 'searchTime') && state.searchQuery) {
+    state.searchPage = 1;
     doSearch(state.searchQuery, 1);
   }
 });
 
 function loadRanking(type, page = 1) {
+  state.rankingType = type;
+  state.rankingPage = page;
   document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.rank-tab[data-type="${type}"]`)?.classList.add('active');
 
@@ -97,10 +152,19 @@ function loadRanking(type, page = 1) {
 }
 
 document.querySelectorAll('.rank-tab').forEach(tab => {
-  tab.addEventListener('click', () => loadRanking(tab.dataset.type));
+  tab.addEventListener('click', () => {
+    state.rankingType = tab.dataset.type;
+    state.rankingPage = 1;
+    loadRanking(state.rankingType, 1);
+  });
 });
 
 function showAlbumDetail(albumId) {
+  const pageNum = currentPage === 'search' ? state.searchPage
+    : currentPage === 'ranking' ? state.rankingPage
+    : currentPage === 'favorites' ? state.favPage
+    : 1;
+  pageStack.push({ page: currentPage, extra: collectPageState(), pageNum });
   navigateTo('detail');
   document.getElementById('albumDetail').innerHTML = '<p class="empty-state">加载中...</p>';
 
@@ -243,6 +307,7 @@ function batchDownload(format) {
 let currentFavFolderId = '0';
 
 function loadFavorites(page) {
+  state.favPage = page;
   const statusEl = document.getElementById('favoritesStatus');
 
   if (!state.isLoggedIn) {
@@ -375,9 +440,10 @@ function loadDashboard() {
 }
 
 function goBack() {
-  if (currentPage === 'detail' || currentPage === 'search') {
-    navigateTo('dashboard');
-  }
+  const entry = pageStack.pop();
+  if (!entry) { navigateTo('dashboard'); restorePageState('dashboard', {}, 1); return; }
+  navigateTo(entry.page);
+  restorePageState(entry.page, entry.extra, entry.pageNum);
 }
 
 function showLoginModal() {

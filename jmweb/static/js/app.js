@@ -1,6 +1,8 @@
 let currentPage = 'dashboard';
 let state = { isLoggedIn: false, username: '' };
 let prevTaskStates = {};
+let selectedAlbums = new Set();
+let currentFavAlbums = [];
 
 function navigateTo(page, param) {
   const readerScreen = document.getElementById('page-reader');
@@ -184,6 +186,58 @@ setInterval(() => {
   if (currentPage === 'downloads') loadDownloadTasks();
 }, 2000);
 
+function toggleSelect(albumId) {
+  if (selectedAlbums.has(albumId)) {
+    selectedAlbums.delete(albumId);
+  } else {
+    selectedAlbums.add(albumId);
+  }
+  updateBatchBar();
+  Components.renderAlbumGrid(currentFavAlbums, 'favoriteGrid', {
+    selectable: true, selected: selectedAlbums,
+  });
+}
+
+function selectAll() {
+  currentFavAlbums.forEach(a => selectedAlbums.add(a.album_id));
+  updateBatchBar();
+  Components.renderAlbumGrid(currentFavAlbums, 'favoriteGrid', {
+    selectable: true, selected: selectedAlbums,
+  });
+}
+
+function deselectAll() {
+  selectedAlbums.clear();
+  updateBatchBar();
+  Components.renderAlbumGrid(currentFavAlbums, 'favoriteGrid', {
+    selectable: true, selected: selectedAlbums,
+  });
+}
+
+function updateBatchBar() {
+  const count = selectedAlbums.size;
+  document.getElementById('selectedCount').textContent = count;
+  document.getElementById('batchActions').style.display = count > 0 ? 'flex' : 'none';
+}
+
+function batchDownload(format) {
+  if (selectedAlbums.size === 0) return;
+  const ids = [...selectedAlbums];
+  showToast(`正在创建 ${ids.length} 个下载任务...`);
+  let success = 0;
+  Promise.all(ids.map(aid =>
+    API.startDownload(aid, null, format).then(() => { success++; }).catch(() => {})
+  )).then(() => {
+    showToast(`已完成 ${success}/${ids.length} 个任务创建`);
+    selectedAlbums.clear();
+    updateBatchBar();
+    Components.renderAlbumGrid(currentFavAlbums, 'favoriteGrid', {
+      selectable: true, selected: selectedAlbums,
+    });
+    loadDownloadTasks();
+  });
+}
+
 function loadFavorites(page) {
   const statusEl = document.getElementById('favoritesStatus');
 
@@ -199,10 +253,15 @@ function loadFavorites(page) {
   }
 
   statusEl.innerHTML = '';
+  selectedAlbums.clear();
   API.getFavorites(page).then(data => {
-    Components.renderAlbumGrid(data.albums, 'favoriteGrid');
+    currentFavAlbums = data.albums;
+    Components.renderAlbumGrid(data.albums, 'favoriteGrid', {
+      selectable: true, selected: selectedAlbums,
+    });
     Components.renderPagination(data.total, data.page_count, page, 'favoritePagination',
       'loadFavorites(');
+    updateBatchBar();
   }).catch(err => {
     document.getElementById('favoriteGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });

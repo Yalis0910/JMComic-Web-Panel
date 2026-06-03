@@ -704,6 +704,126 @@ body {
   cursor: pointer;
 }
 
+.fav-batch-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--paper);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 20px;
+  animation: fadeIn 0.2s;
+}
+
+.fav-batch-bar .batch-info {
+  font-size: 0.875rem;
+  color: var(--slate);
+}
+
+.fav-batch-bar .batch-info strong {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.fav-batch-bar .batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.batch-btn {
+  padding: 8px 16px;
+  background: var(--cream);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--slate);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.batch-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+  background: var(--paper);
+}
+
+.batch-btn-primary {
+  background: var(--vermillion);
+  border-color: var(--vermillion);
+  color: var(--cream);
+}
+
+.batch-btn-primary:hover {
+  background: var(--vermillion-dark);
+  border-color: var(--vermillion-dark);
+  color: var(--cream);
+}
+
+.batch-select {
+  padding: 8px 12px;
+  background: var(--cream);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.batch-select:focus {
+  outline: none;
+  border-color: var(--ink);
+}
+
+/* 可选择卡片 */
+.manga-card-selectable {
+  position: relative;
+  cursor: default;
+}
+
+.manga-card-selectable .manga-cover {
+  cursor: pointer;
+}
+
+.manga-checkbox {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 10;
+  cursor: pointer;
+  line-height: 0;
+}
+
+.checkbox-box {
+  width: 1.375rem;
+  height: 1.375rem;
+  border: 2px solid rgba(255,255,255,0.85);
+  border-radius: 4px;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  backdrop-filter: blur(2px);
+}
+
+.checkbox-box.checked {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+
+.checkbox-box svg {
+  width: 0.8125rem;
+  height: 0.8125rem;
+  color: #fff;
+  display: block;
+}
+
 .settings-panel {
   display: grid;
   grid-template-columns: 1fr 1fr;

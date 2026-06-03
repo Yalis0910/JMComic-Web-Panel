@@ -405,6 +405,7 @@ class ZipPlugin(JmOptionPlugin):
                     abspath = os.path.join(photo_dir, file)
                     relpath = os.path.relpath(abspath, album_dir)
                     f.write(abspath, relpath)
+        path_to_delete.append(self.unified_path(album_dir))
         # 打印结果
         self.log(f'{album.alias_cn()}压缩成功！'
                  f'[{album}] → [{zip_path}]', 'finish')

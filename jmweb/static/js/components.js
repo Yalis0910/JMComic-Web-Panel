@@ -11,15 +11,25 @@ function _showDetailCover() {
 }
 
 const Components = {
-  renderAlbumGrid(albums, containerId) {
+  renderAlbumGrid(albums, containerId, options = {}) {
     const container = document.getElementById(containerId);
     if (!albums || albums.length === 0) {
       container.innerHTML = '<p class="empty-state">暂无数据</p>';
       return;
     }
-    container.innerHTML = albums.map(a => `
-      <div class="manga-card" onclick="showAlbumDetail('${a.album_id}')">
-        <div class="manga-cover">
+    const { selectable = false, selected = new Set() } = options;
+    container.innerHTML = albums.map(a => {
+      const isChecked = selected.has(a.album_id);
+      return `
+      <div class="manga-card${selectable ? ' manga-card-selectable' : ''}"
+           ${selectable ? '' : `onclick="showAlbumDetail('${a.album_id}')"`}>
+        ${selectable ? `
+          <div class="manga-checkbox" onclick="event.stopPropagation();toggleSelect('${a.album_id}')">
+            <div class="checkbox-box${isChecked ? ' checked' : ''}">
+              ${isChecked ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6L9 17l-5-5"/></svg>' : ''}
+            </div>
+          </div>` : ''}
+        <div class="manga-cover" ${selectable ? `onclick="showAlbumDetail('${a.album_id}')"` : ''}>
           ${_showListCover() && a.cover_url
             ? `<img class="cover-img" src="${escapeHtml(a.cover_url)}"
                   alt="${escapeHtml(a.title)}"
@@ -32,8 +42,8 @@ const Components = {
           <div class="manga-title" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</div>
           <div class="manga-meta">JM${a.album_id}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   },
 
   renderPagination(total, pageCount, currentPage, containerId, callback) {

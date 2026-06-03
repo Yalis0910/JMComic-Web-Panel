@@ -137,6 +137,20 @@
           <div class="title-decoration"></div>
         </div>
         <div id="favoritesStatus"></div>
+        <div class="fav-batch-bar" id="batchActions" style="display:none;">
+          <span class="batch-info">已选 <strong id="selectedCount">0</strong> 本</span>
+          <div class="batch-actions">
+            <button class="batch-btn" onclick="selectAll()">全选</button>
+            <button class="batch-btn" onclick="deselectAll()">取消全选</button>
+            <select id="batchFormat" class="batch-select">
+              <option value="folder">图片文件夹</option>
+              <option value="zip">ZIP 压缩包</option>
+            </select>
+            <button class="batch-btn batch-btn-primary" onclick="batchDownload(document.getElementById('batchFormat').value)">
+              批量下载
+            </button>
+          </div>
+        </div>
         <div class="manga-grid" id="favoriteGrid"></div>
         <div class="page-nav" id="favoritePagination"></div>
       </section>

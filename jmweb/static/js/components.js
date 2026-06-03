@@ -1,3 +1,15 @@
+function _coverChar(title) {
+  return escapeHtml(title).charAt(0) || '?';
+}
+
+function _showListCover() {
+  return localStorage.getItem('ui_show_list_cover') === 'true';
+}
+
+function _showDetailCover() {
+  return localStorage.getItem('ui_show_detail_cover') === 'true';
+}
+
 const Components = {
   renderAlbumGrid(albums, containerId) {
     const container = document.getElementById(containerId);
@@ -8,12 +20,12 @@ const Components = {
     container.innerHTML = albums.map(a => `
       <div class="manga-card" onclick="showAlbumDetail('${a.album_id}')">
         <div class="manga-cover">
-          ${a.cover_url
+          ${_showListCover() && a.cover_url
             ? `<img class="cover-img" src="${escapeHtml(a.cover_url)}"
                   alt="${escapeHtml(a.title)}"
                   onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
-               <span class="cover-char" style="display:none;">${escapeHtml(a.title).charAt(0) || '?'}</span>`
-            : `<span class="cover-char">${escapeHtml(a.title).charAt(0) || '?'}</span>`
+               <span class="cover-char" style="display:none;">${_coverChar(a.title)}</span>`
+            : `<span class="cover-char">${_coverChar(a.title)}</span>`
           }
         </div>
         <div class="manga-info">
@@ -54,7 +66,7 @@ const Components = {
     container.innerHTML = `
       <div class="detail-frame">
         <div class="detail-cover">
-          ${album.cover_url ? `<img class="detail-cover-img" src="${escapeHtml(album.cover_url)}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><span class="detail-cover-char" style="display:none;">${escapeHtml(album.title).charAt(0) || '?'}</span>` : `<span class="detail-cover-char">${escapeHtml(album.title).charAt(0) || '?'}</span>`}
+          ${_showDetailCover() && album.cover_url ? `<img class="detail-cover-img" src="${escapeHtml(album.cover_url)}" alt="${escapeHtml(album.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';"><span class="detail-cover-char" style="display:none;">${_coverChar(album.title)}</span>` : `<span class="detail-cover-char">${_coverChar(album.title)}</span>`}
         </div>
         <div class="detail-info">
           <h2>${escapeHtml(album.title)}</h2>

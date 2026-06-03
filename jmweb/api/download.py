@@ -1,10 +1,27 @@
 import threading
 from fastapi import APIRouter, HTTPException, Body
 from jmcomic import download_album, JmOption
+from jmcomic.jm_option import JmModuleConfig
+from jmcomic.jm_plugin import JmOptionPlugin
 from jmweb.utils.progress import manager
 from jmweb.api.config import get_config_path
 
 router = APIRouter(tags=["download"])
+
+
+class _ProgressPlugin(JmOptionPlugin):
+    plugin_key = '_progress'
+
+    def invoke(self, photo=None, downloader=None, **kwargs):
+        if photo is None:
+            return
+        task_id = getattr(self.option, '_progress_task_id', None)
+        total = getattr(self.option, '_progress_total', 0)
+        if not task_id or total <= 0:
+            return
+        with self.option._progress_lock:
+            self.option._progress_completed += len(photo)
+            manager.update_progress(task_id, self.option._progress_completed, total)
 
 
 def _build_option(option_path: str = None, download_type: str = "folder"):
@@ -33,11 +50,27 @@ def _build_option(option_path: str = None, download_type: str = "folder"):
 def _do_download(task_id: str, album_id: str, option_path: str = None, download_type: str = "folder"):
     try:
         option = _build_option(option_path, download_type)
+        client = option.new_jm_client(impl='html')
+        album = client.get_album_detail(album_id)
+        total_pages = int(album.page_count)
+
+        manager.update_progress(task_id, 0, total_pages)
+        option._progress_task_id = task_id
+        option._progress_total = total_pages
+        option._progress_completed = 0
+        option._progress_lock = threading.Lock()
+
+        JmModuleConfig.REGISTRY_PLUGIN['_progress'] = _ProgressPlugin
+        option.plugins.src_dict.setdefault('after_photo', []).insert(0, {
+            "plugin": "_progress",
+            "kwargs": {},
+        })
 
         def callback(album, dler):
             manager.complete_task(task_id)
 
         download_album(album_id, option, callback=callback, check_exception=False)
+
     except Exception as e:
         manager.complete_task(task_id, error=str(e))
 

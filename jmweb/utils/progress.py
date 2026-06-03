@@ -1,7 +1,12 @@
+import json
 import threading
 import time
+from pathlib import Path
 from typing import Dict, Optional
 from dataclasses import dataclass, field
+
+_HISTORY_FILE = Path(__file__).parent.parent.parent / "config" / "download_history.json"
+_MAX_HISTORY = 200
 
 
 @dataclass
@@ -29,6 +34,7 @@ class DownloadManager:
                 cls._instance = super().__new__(cls)
                 cls._instance._tasks: Dict[str, DownloadTask] = {}
                 cls._instance._task_lock = threading.Lock()
+                cls._instance._load_from_file()
             return cls._instance
 
     def create_task(self, album_id: str) -> DownloadTask:
@@ -37,6 +43,7 @@ class DownloadManager:
         task = DownloadTask(task_id=task_id, album_id=album_id)
         with self._task_lock:
             self._tasks[task_id] = task
+        self._save_to_file()
         return task
 
     def get_task(self, task_id: str) -> Optional[DownloadTask]:
@@ -56,6 +63,7 @@ class DownloadManager:
             task.completed_count = completed
             task.total_count = total
             task.progress = int(completed / total * 100) if total > 0 else 0
+            self._save_to_file()
 
     def complete_task(self, task_id: str, error: Optional[str] = None):
         task = self.get_task(task_id)
@@ -63,11 +71,42 @@ class DownloadManager:
             task.status = "failed" if error else "completed"
             task.error = error
             task.progress = 100 if not error else task.progress
+        self._save_to_file()
 
     def cancel_task(self, task_id: str):
         task = self.get_task(task_id)
         if task:
             task.status = "cancelled"
+        self._save_to_file()
+
+
+    def _save_to_file(self):
+        tasks_data = []
+        for t in self._tasks.values():
+            d = {k: v for k, v in t.__dict__.items() if k != 'thread'}
+            tasks_data.append(d)
+        tasks_data.sort(key=lambda x: x['created_at'], reverse=True)
+        tasks_data = tasks_data[:_MAX_HISTORY]
+        _HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        _HISTORY_FILE.write_text(
+            json.dumps({"tasks": tasks_data}, ensure_ascii=False, indent=2),
+            encoding='utf-8'
+        )
+
+    def _load_from_file(self):
+        if not _HISTORY_FILE.exists():
+            return
+        try:
+            data = json.loads(_HISTORY_FILE.read_text(encoding='utf-8'))
+            for item in data.get('tasks', []):
+                if item['status'] == 'running':
+                    item['status'] = 'failed'
+                    item['error'] = '服务重启，任务中断'
+                task = DownloadTask(**item)
+                self._tasks[task.task_id] = task
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
+            import logging
+            logging.warning(f"下载历史文件解析失败，将重新开始: {e}")
 
 
 manager = DownloadManager()

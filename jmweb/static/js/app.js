@@ -1,5 +1,6 @@
 let currentPage = 'dashboard';
 let state = { isLoggedIn: false, username: '' };
+let prevTaskStates = {};
 
 function navigateTo(page, param) {
   const readerScreen = document.getElementById('page-reader');
@@ -168,6 +169,13 @@ document.getElementById('startDownloadBtn')?.addEventListener('click', () => {
 
 function loadDownloadTasks() {
   API.getDownloadTasks().then(tasks => {
+    tasks.forEach(t => {
+      const prev = prevTaskStates[t.task_id];
+      if (prev && prev !== 'completed' && t.status === 'completed') {
+        showToast(`JM${t.album_id} 下载完成${t.download_type === 'zip' ? '（ZIP）' : ''}`);
+      }
+      prevTaskStates[t.task_id] = t.status;
+    });
     Components.renderDownloadTasks(tasks);
   });
 }
@@ -244,6 +252,10 @@ function loadConfig() {
     syncConfigToForm(config);
     document.getElementById('configEditor').value = JSON.stringify(config, null, 2);
   });
+  const listCb = document.getElementById('settingShowListCover');
+  if (listCb) listCb.checked = localStorage.getItem('ui_show_list_cover') === 'true';
+  const detailCb = document.getElementById('settingShowDetailCover');
+  if (detailCb) detailCb.checked = localStorage.getItem('ui_show_detail_cover') === 'true';
 }
 
 document.getElementById('saveConfigBtn')?.addEventListener('click', () => {
@@ -257,6 +269,13 @@ document.getElementById('saveConfigBtn')?.addEventListener('click', () => {
 
 ['settingClientImpl', 'settingBaseDir', 'settingDirRule', 'settingImageThread'].forEach(id => {
   document.getElementById(id)?.addEventListener('change', syncFormToConfig);
+});
+
+document.getElementById('settingShowListCover')?.addEventListener('change', function () {
+  localStorage.setItem('ui_show_list_cover', this.checked);
+});
+document.getElementById('settingShowDetailCover')?.addEventListener('change', function () {
+  localStorage.setItem('ui_show_detail_cover', this.checked);
 });
 
 function loadDashboard() {

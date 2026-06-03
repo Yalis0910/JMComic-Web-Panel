@@ -105,6 +105,18 @@
             <option value="author">按作者</option>
             <option value="tag">按标签</option>
           </select>
+          <select id="searchOrderBy" class="filter-select">
+            <option value="mr">最新发布</option>
+            <option value="mv">最多观看</option>
+            <option value="tf">最多点赞</option>
+            <option value="mp">最多图片</option>
+          </select>
+          <select id="searchTime" class="filter-select">
+            <option value="a">全部时间</option>
+            <option value="t">今天</option>
+            <option value="w">本周</option>
+            <option value="m">本月</option>
+          </select>
         </div>
         <div class="manga-grid" id="searchGrid"></div>
         <div class="page-nav" id="searchPagination"></div>
@@ -137,6 +149,11 @@
           <div class="title-decoration"></div>
         </div>
         <div id="favoritesStatus"></div>
+        <div class="filter-bar" id="favFolderBar" style="display:none;">
+          <select id="favFolderSelect" class="filter-select">
+            <option value="0">全部文件夹</option>
+          </select>
+        </div>
         <div class="fav-batch-bar" id="batchActions" style="display:none;">
           <span class="batch-info">已选 <strong id="selectedCount">0</strong> 本</span>
           <div class="batch-actions">

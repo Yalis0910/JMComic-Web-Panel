@@ -60,11 +60,13 @@ function doSearch(query, page) {
   state.searchQuery = query;
   state.searchPage = page;
   const type = document.getElementById('searchType')?.value || 'all';
+  const orderBy = document.getElementById('searchOrderBy')?.value || 'mr';
+  const time = document.getElementById('searchTime')?.value || 'a';
 
   let promise;
-  if (type === 'author') promise = API.searchByAuthor(query, page);
-  else if (type === 'tag') promise = API.searchByTag(query, page);
-  else promise = API.search(query, page);
+  if (type === 'author') promise = API.searchByAuthor(query, page, orderBy, time);
+  else if (type === 'tag') promise = API.searchByTag(query, page, orderBy, time);
+  else promise = API.search(query, page, orderBy, time);
 
   promise.then(data => {
     Components.renderAlbumGrid(data.albums, 'searchGrid');
@@ -76,7 +78,7 @@ function doSearch(query, page) {
 }
 
 document.addEventListener('change', (e) => {
-  if (e.target.id === 'searchType' && state.searchQuery) {
+  if ((e.target.id === 'searchType' || e.target.id === 'searchOrderBy' || e.target.id === 'searchTime') && state.searchQuery) {
     doSearch(state.searchQuery, 1);
   }
 });
@@ -238,6 +240,8 @@ function batchDownload(format) {
   });
 }
 
+let currentFavFolderId = '0';
+
 function loadFavorites(page) {
   const statusEl = document.getElementById('favoritesStatus');
 
@@ -247,6 +251,7 @@ function loadFavorites(page) {
         <span class="fav-prompt-text">请先登录后查看收藏</span>
         <span class="fav-prompt-btn" onclick="showLoginModal()">去登录 →</span>
       </div>`;
+    document.getElementById('favFolderBar').style.display = 'none';
     document.getElementById('favoriteGrid').innerHTML = '';
     document.getElementById('favoritePagination').innerHTML = '';
     return;
@@ -254,7 +259,7 @@ function loadFavorites(page) {
 
   statusEl.innerHTML = '';
   selectedAlbums.clear();
-  API.getFavorites(page).then(data => {
+  API.getFavorites(page, currentFavFolderId).then(data => {
     currentFavAlbums = data.albums;
     Components.renderAlbumGrid(data.albums, 'favoriteGrid', {
       selectable: true, selected: selectedAlbums,
@@ -262,10 +267,35 @@ function loadFavorites(page) {
     Components.renderPagination(data.total, data.page_count, page, 'favoritePagination',
       'loadFavorites(');
     updateBatchBar();
+
+    const folderBar = document.getElementById('favFolderBar');
+    const folderSelect = document.getElementById('favFolderSelect');
+    const currentVal = folderSelect.value;
+    folderSelect.innerHTML = '<option value="0">全部文件夹</option>';
+    if (data.folders && data.folders.length > 0) {
+      data.folders.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.folder_id;
+        opt.textContent = f.name;
+        folderSelect.appendChild(opt);
+      });
+      folderSelect.value = currentVal && [...folderSelect.options].some(o => o.value === currentVal) ? currentVal : '0';
+      currentFavFolderId = folderSelect.value;
+      folderBar.style.display = '';
+    } else {
+      folderBar.style.display = 'none';
+    }
   }).catch(err => {
     document.getElementById('favoriteGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
 }
+
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'favFolderSelect') {
+    currentFavFolderId = e.target.value;
+    loadFavorites(1);
+  }
+});
 
 function syncFormToConfig() {
   const configEditor = document.getElementById('configEditor');

@@ -20,7 +20,7 @@ class ThumbnailPanel {
         dataset: { index }
       });
       const img = DOM.create('img', {
-        attributes: { src: url, alt: `Page ${index + 1}`, loading: 'lazy' }
+        attributes: { src: url, alt: `Page ${index + 1}`, loading: 'lazy', width: '200', height: '300' }
       });
       const number = DOM.create('span', {
         className: 'thumbnail-number',

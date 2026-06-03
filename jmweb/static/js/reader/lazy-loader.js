@@ -89,7 +89,9 @@ class LazyLoader {
       element.classList.add('loaded');
       element.dataset.loaded = 'true';
       element.removeAttribute('data-src');
-      const placeholder = element.parentElement.querySelector('.image-placeholder');
+      const wrapper = element.parentElement;
+      if (wrapper) wrapper.style.aspectRatio = 'auto';
+      const placeholder = wrapper && wrapper.querySelector('.image-placeholder');
       if (placeholder) placeholder.style.display = 'none';
       onComplete();
     };

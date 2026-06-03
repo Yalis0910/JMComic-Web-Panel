@@ -18,11 +18,15 @@ const API = {
   getAlbum(id) { return this.request(`/album/${id}`); },
   getPhoto(id) { return this.request(`/photo/${id}`); },
 
-  search(q, page = 1, orderBy = 'latest') {
-    return this.request(`/search?q=${encodeURIComponent(q)}&page=${page}&order_by=${orderBy}`);
+  search(q, page = 1, orderBy = 'mr', time = 'a', category = '0') {
+    return this.request(`/search?q=${encodeURIComponent(q)}&page=${page}&order_by=${orderBy}&time=${time}&category=${category}`);
   },
-  searchByAuthor(q, page = 1) { return this.request(`/search/author?q=${encodeURIComponent(q)}&page=${page}`); },
-  searchByTag(q, page = 1) { return this.request(`/search/tag?q=${encodeURIComponent(q)}&page=${page}`); },
+  searchByAuthor(q, page = 1, orderBy = 'mr', time = 'a', category = '0') {
+    return this.request(`/search/author?q=${encodeURIComponent(q)}&page=${page}&order_by=${orderBy}&time=${time}&category=${category}`);
+  },
+  searchByTag(q, page = 1, orderBy = 'mr', time = 'a', category = '0') {
+    return this.request(`/search/tag?q=${encodeURIComponent(q)}&page=${page}&order_by=${orderBy}&time=${time}&category=${category}`);
+  },
 
   getRanking(type, page = 1, category = 'ALL') {
     return this.request(`/ranking/${type}?page=${page}&category=${category}`);

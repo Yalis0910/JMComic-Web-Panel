@@ -29,11 +29,13 @@ def _format_search_result(page):
 async def search_album(
     q: str = Query(..., description="搜索关键词"),
     page: int = Query(1, ge=1),
-    order_by: str = Query("latest", description="排序: latest/view/like"),
+    order_by: str = Query("mr", description="排序: mr/mv/mp/tf"),
+    time: str = Query("a", description="时间: a/t/w/m"),
+    category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
         client = _get_client()
-        result = client.search_site(search_query=q, page=page, order_by=order_by)
+        result = client.search_site(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {
             "code": 0,
             "data": _format_search_result(result),
@@ -47,10 +49,13 @@ async def search_album(
 async def search_author(
     q: str = Query(...),
     page: int = Query(1, ge=1),
+    order_by: str = Query("mr", description="排序: mr/mv/mp/tf"),
+    time: str = Query("a", description="时间: a/t/w/m"),
+    category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
         client = _get_client()
-        result = client.search_author(search_query=q, page=page)
+        result = client.search_author(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {"code": 0, "data": _format_search_result(result), "message": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -60,10 +65,13 @@ async def search_author(
 async def search_tag(
     q: str = Query(...),
     page: int = Query(1, ge=1),
+    order_by: str = Query("mr", description="排序: mr/mv/mp/tf"),
+    time: str = Query("a", description="时间: a/t/w/m"),
+    category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
         client = _get_client()
-        result = client.search_tag(search_query=q, page=page)
+        result = client.search_tag(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {"code": 0, "data": _format_search_result(result), "message": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

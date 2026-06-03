@@ -32,6 +32,8 @@ setup(
         'PyYAML',
         'Pillow',
         'pycryptodome',
+        'fastapi',
+        'uvicorn',
     ],
     keywords=['python', 'jmcomic', '18comic', '禁漫天堂', 'NSFW'],
     classifiers=[

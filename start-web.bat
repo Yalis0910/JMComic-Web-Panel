@@ -23,7 +23,7 @@ echo.
 
 REM Check dependencies
 echo [2/3] Checking dependencies...
-python -c "import fastapi" >nul 2>&1
+python -c "import fastapi, uvicorn" >nul 2>&1
 if errorlevel 1 (
     echo [INFO] Installing dependencies...
     pip install -e .

@@ -83,6 +83,8 @@ class MangaReader {
       fragment.appendChild(wrapper);
     });
     imageList.appendChild(fragment);
+    // 切换本子时重置滚动位置到顶部
+    DOM.$('#reader-container').scrollTop = 0;
   }
 
   createImageWrapper(url, index) {
@@ -98,7 +100,7 @@ class MangaReader {
     wrapper.appendChild(placeholder);
     wrapper.appendChild(img);
     const proxyUrl = `/api/v1/image/proxy?url=${encodeURIComponent(url)}`;
-    this.lazyLoader.observe(img, proxyUrl);
+    this.lazyLoader.register(img, proxyUrl, index);
     return wrapper;
   }
 
@@ -147,12 +149,14 @@ class MangaReader {
 
   goBack() {
     if (this.thumbnail.isVisible()) { this.thumbnail.hide(); return; }
+    this.lazyLoader.reset();
     this.images = [];
     this.photoId = null;
     this.albumId = null;
     this.zoom.reset();
     this.thumbnail.clear();
     DOM.$('#reader-image-list').innerHTML = '';
+    DOM.$('#reader-container').scrollTop = 0;
     navigateTo('detail');
   }
 }

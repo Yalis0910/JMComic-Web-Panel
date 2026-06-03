@@ -1,10 +1,10 @@
 const ReaderConfig = {
   lazyLoad: {
-    rootMargin: '100px',
+    rootMargin: '1500px',
     threshold: 0.01
   },
   preload: {
-    count: 3
+    count: 8
   },
   zoom: {
     min: 0.5,

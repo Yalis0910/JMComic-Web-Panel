@@ -69,7 +69,10 @@ const Components = {
     const episodes = (album.episodes || []).map(ep => `
       <div class="episode-row">
         <span class="episode-name">第${ep.index}話 ${escapeHtml(ep.name)}</span>
-        <button class="episode-btn" onclick="openReader('${ep.photo_id}', '${album.album_id}', '${escapeHtml(ep.name.replace(/'/g, "\\'"))}')">阅读</button>
+        <div class="episode-actions">
+          <button class="episode-btn" onclick="openReader('${ep.photo_id}', '${album.album_id}', '${escapeHtml(ep.name.replace(/'/g, "\\'"))}')">阅读</button>
+          <button class="episode-btn episode-btn-dl" onclick="downloadPhoto('${ep.photo_id}', '${album.album_id}')">下载</button>
+        </div>
       </div>`).join('');
     const loggedIn = state.isLoggedIn;
 

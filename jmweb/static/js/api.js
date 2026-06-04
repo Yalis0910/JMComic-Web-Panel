@@ -36,6 +36,12 @@ const API = {
     return this.request(`/category?page=${page}&time=${time}&order_by=${orderBy}&category=${category}`);
   },
 
+  startDownloadPhoto(photoId, albumId, optionPath = null, downloadType = 'folder') {
+    return this.request('/download/photo', {
+      method: 'POST',
+      body: JSON.stringify({ photo_id: photoId, album_id: albumId, option_path: optionPath, download_type: downloadType }),
+    });
+  },
   startDownload(albumId, optionPath = null, downloadType = 'folder') {
     return this.request('/download/album', {
       method: 'POST',

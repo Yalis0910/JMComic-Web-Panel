@@ -1,6 +1,6 @@
 import threading
 from fastapi import APIRouter, HTTPException, Body
-from jmcomic import download_album, JmOption
+from jmcomic import download_album, download_photo, JmOption
 from jmcomic.jm_option import JmModuleConfig
 from jmcomic.jm_plugin import JmOptionPlugin
 from jmweb.utils.progress import manager
@@ -73,6 +73,79 @@ def _do_download(task_id: str, album_id: str, option_path: str = None, download_
 
     except Exception as e:
         manager.complete_task(task_id, error=str(e))
+
+
+def _do_download_photo(task_id: str, photo_id: str, album_id: str, option_path: str = None, download_type: str = "folder"):
+    try:
+        option = _build_option(option_path, download_type)
+
+        # 单章节下载：zip 插件应注册到 after_photo 而非 after_album
+        if download_type == "zip":
+            option.plugins.src_dict.pop("after_album", None)
+            option.plugins.src_dict["after_photo"] = [
+                {
+                    "plugin": "zip",
+                    "kwargs": {
+                        "filename_rule": "Ptitle",
+                        "suffix": "zip",
+                        "zip_dir": option.dir_rule.base_dir,
+                        "delete_original_file": True,
+                    },
+                }
+            ]
+
+        client = option.new_jm_client(impl='html')
+        photo = client.get_photo_detail(photo_id, fetch_album=False)
+        total_pages = len(photo)
+
+        manager.update_progress(task_id, 0, total_pages)
+        option._progress_task_id = task_id
+        option._progress_total = total_pages
+        option._progress_completed = 0
+        option._progress_lock = threading.Lock()
+
+        JmModuleConfig.REGISTRY_PLUGIN['_progress'] = _ProgressPlugin
+        option.plugins.src_dict.setdefault('after_photo', []).insert(0, {
+            "plugin": "_progress",
+            "kwargs": {},
+        })
+
+        def callback(photo, dler):
+            manager.complete_task(task_id)
+
+        download_photo(photo_id, option, callback=callback, check_exception=False)
+
+    except Exception as e:
+        manager.complete_task(task_id, error=str(e))
+
+
+@router.post("/download/photo")
+async def download_photo_endpoint(
+    photo_id: str = Body(...),
+    album_id: str = Body(...),
+    option_path: str = Body(None),
+    download_type: str = Body("folder"),
+):
+    if download_type not in ("folder", "zip"):
+        raise HTTPException(status_code=400, detail="download_type 必须是 folder 或 zip")
+
+    task = manager.create_task(album_id)
+    task.status = "running"
+    task.download_type = download_type
+
+    t = threading.Thread(
+        target=_do_download_photo,
+        args=(task.task_id, photo_id, album_id, option_path, download_type),
+        daemon=True,
+    )
+    task.thread = t
+    t.start()
+
+    return {
+        "code": 0,
+        "data": {"task_id": task.task_id, "album_id": album_id, "photo_id": photo_id, "download_type": download_type},
+        "message": f"章节下载任务已创建（{'压缩包' if download_type == 'zip' else '文件夹'}）",
+    }
 
 
 @router.post("/download/album")

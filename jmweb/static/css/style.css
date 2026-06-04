@@ -577,6 +577,10 @@ body {
 
 .episode-row:hover { border-color: var(--border-strong); }
 .episode-name { font-size: 14px; }
+.episode-actions {
+  display: flex;
+  gap: 8px;
+}
 .episode-btn {
   padding: 6px 14px;
   background: var(--ink);

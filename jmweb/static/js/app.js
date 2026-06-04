@@ -197,8 +197,12 @@ function downloadAlbumWithFormat(albumId) {
   }).catch(err => showToast(`创建失败：${err.message}`, true));
 }
 
-function downloadPhoto(photoId) {
-  showToast('章节下载功能将在后续版本完善');
+function downloadPhoto(photoId, albumId) {
+  const fmt = document.getElementById('downloadFormatSelect')?.value || 'folder';
+  API.startDownloadPhoto(photoId, albumId, null, fmt).then(data => {
+    showToast(`章节任务已创建 #${data.task_id}`);
+    loadDownloadTasks();
+  }).catch(err => showToast(`创建失败：${err.message}`, true));
 }
 
 function cancelDownload(taskId) {
@@ -410,6 +414,10 @@ function loadConfig() {
   if (listCb) listCb.checked = localStorage.getItem('ui_show_list_cover') === 'true';
   const detailCb = document.getElementById('settingShowDetailCover');
   if (detailCb) detailCb.checked = localStorage.getItem('ui_show_detail_cover') === 'true';
+  const marginInput = document.getElementById('settingPreloadMargin');
+  if (marginInput) marginInput.value = localStorage.getItem('reader_rootMargin')?.replace('px', '') || '1500';
+  const countInput = document.getElementById('settingPreloadCount');
+  if (countInput) countInput.value = localStorage.getItem('reader_preloadCount') || '8';
 }
 
 document.getElementById('saveConfigBtn')?.addEventListener('click', () => {
@@ -430,6 +438,12 @@ document.getElementById('settingShowListCover')?.addEventListener('change', func
 });
 document.getElementById('settingShowDetailCover')?.addEventListener('change', function () {
   localStorage.setItem('ui_show_detail_cover', this.checked);
+});
+document.getElementById('settingPreloadMargin')?.addEventListener('change', function () {
+  localStorage.setItem('reader_rootMargin', this.value + 'px');
+});
+document.getElementById('settingPreloadCount')?.addEventListener('change', function () {
+  localStorage.setItem('reader_preloadCount', this.value);
 });
 
 function loadDashboard() {

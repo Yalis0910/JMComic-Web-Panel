@@ -1037,6 +1037,30 @@ body {
   color: var(--error);
 }
 
+.grid-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  gap: 16px;
+}
+.grid-spinner .spinner-ring {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--ink);
+  border-radius: 50%;
+  animation: grid-spin 1s linear infinite;
+}
+@keyframes grid-spin {
+  to { transform: rotate(360deg); }
+}
+.grid-spinner .spinner-text {
+  color: var(--slate);
+  font-size: 13px;
+}
+
 @media (max-width: 768px) {
   .masthead-inner { flex-wrap: wrap; height: auto; padding: 16px 0; gap: 16px; }
   .main-nav { order: 3; width: 100%; justify-content: center; }

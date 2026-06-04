@@ -11,6 +11,9 @@ function _showDetailCover() {
 }
 
 const Components = {
+  gridSpinner() {
+    return '<div class="grid-spinner"><div class="spinner-ring"></div><div class="spinner-text">加载中...</div></div>';
+  },
   renderAlbumGrid(albums, containerId, options = {}) {
     const container = document.getElementById(containerId);
     if (!albums || albums.length === 0) {

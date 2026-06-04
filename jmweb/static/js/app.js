@@ -115,6 +115,8 @@ function doSearch(query, page) {
   const orderBy = document.getElementById('searchOrderBy')?.value || 'mr';
   const time = document.getElementById('searchTime')?.value || 'a';
 
+  document.getElementById('searchGrid').innerHTML = Components.gridSpinner();
+
   let promise;
   if (type === 'author') promise = API.searchByAuthor(query, page, orderBy, time);
   else if (type === 'tag') promise = API.searchByTag(query, page, orderBy, time);
@@ -141,6 +143,8 @@ function loadRanking(type, page = 1) {
   state.rankingPage = page;
   document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.rank-tab[data-type="${type}"]`)?.classList.add('active');
+
+  document.getElementById('rankingGrid').innerHTML = Components.gridSpinner();
 
   API.getRanking(type, page).then(data => {
     Components.renderAlbumGrid(data.albums, 'rankingGrid');
@@ -328,6 +332,7 @@ function loadFavorites(page) {
 
   statusEl.innerHTML = '';
   selectedAlbums.clear();
+  document.getElementById('favoriteGrid').innerHTML = Components.gridSpinner();
   API.getFavorites(page, currentFavFolderId).then(data => {
     currentFavAlbums = data.albums;
     Components.renderAlbumGrid(data.albums, 'favoriteGrid', {

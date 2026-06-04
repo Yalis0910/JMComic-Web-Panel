@@ -20,7 +20,7 @@ def _parse_photo_id_from_url(url: str) -> str:
     return m.group(1) if m else None
 
 
-_cache_headers = {"Cache-Control": "public, max-age=86400"}
+_cache_headers = {"Cache-Control": "public, max-age=2592000"}
 
 
 @router.get("/image/proxy")

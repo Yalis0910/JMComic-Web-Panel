@@ -53,6 +53,9 @@ const API = {
     return this.request(`/download/cancel/${taskId}`, { method: 'POST' });
   },
   getDownloadTasks() { return this.request('/download/tasks'); },
+  clearDownloadHistory() {
+    return this.request('/download/clear-history', { method: 'POST' });
+  },
 
   getConfig() { return this.request('/config'); },
   updateConfig(data) {
@@ -75,7 +78,17 @@ const API = {
   getFavorites(page = 1, folderId = '0') {
     return this.request(`/user/favorites?page=${page}&folder_id=${folderId}`);
   },
-  addFavorite(albumId) {
-    return this.request(`/user/favorites/${albumId}`, { method: 'POST' });
+  exportFavorites() {
+    return fetch(`${this.baseURL}/user/favorites/export`).then(resp => {
+      if (!resp.ok) return resp.json().then(d => { throw new Error(d.detail || '导出失败'); });
+      return resp.blob();
+    });
+  },
+
+  addFavorite(albumId, folderId = '0') {
+    return this.request(`/user/favorites/${albumId}`, {
+      method: 'POST',
+      body: JSON.stringify({ folder_id: folderId }),
+    });
   },
 };

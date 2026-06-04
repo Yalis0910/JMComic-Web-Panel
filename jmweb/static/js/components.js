@@ -68,7 +68,8 @@ const Components = {
 
   renderAlbumDetail(album) {
     const container = document.getElementById('albumDetail');
-    const tags = (album.tags || []).map(t => `<span class="detail-tag">${escapeHtml(t)}</span>`).join('');
+    const tags = (album.tags || []).map(t => `<span class="detail-tag" onclick="searchByTag('${escapeHtml(t)}')">${escapeHtml(t)}</span>`).join('');
+    const authors = (album.authors || []).map(a => `<a class="detail-link" onclick="searchByAuthor('${escapeHtml(a)}')">${escapeHtml(a)}</a>`).join('、') || '未知';
     const episodes = (album.episodes || []).map(ep => `
       <div class="episode-row">
         <span class="episode-name">第${ep.index}話 ${escapeHtml(ep.name)}</span>
@@ -87,7 +88,7 @@ const Components = {
         <div class="detail-info">
           <h2>${escapeHtml(album.title)}</h2>
           <div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">JM${album.album_id}</span></div>
-          <div class="detail-row"><span class="detail-label">作者</span><span class="detail-value">${(album.authors || []).join('、') || '未知'}</span></div>
+          <div class="detail-row"><span class="detail-label">作者</span><span class="detail-value">${authors}</span></div>
           <div class="detail-row"><span class="detail-label">页数</span><span class="detail-value">${album.page_count}</span></div>
           <div class="detail-row"><span class="detail-label">观看</span><span class="detail-value">${album.views}</span></div>
           <div class="detail-row"><span class="detail-label">点赞</span><span class="detail-value">${album.likes}</span></div>
@@ -99,6 +100,8 @@ const Components = {
             <select id="downloadFormatSelect" class="action-select">
               <option value="folder">图片文件夹</option>
               <option value="zip">ZIP 压缩包</option>
+              <option value="pdf">PDF 文档</option>
+              <option value="long_img">长图 PNG</option>
             </select>
             <button class="action-btn" onclick="downloadAlbumWithFormat('${album.album_id}')">下载本子</button>
             <button class="action-btn action-alt" onclick="addFav('${album.album_id}')">${loggedIn ? '收藏' : '登录后收藏'}</button>
@@ -125,7 +128,8 @@ const Components = {
       const colorMap = { pending: 'var(--warning)', running: 'var(--slate)', completed: 'var(--success)', failed: 'var(--error)', cancelled: 'var(--slate-light)' };
       const st = statusMap[t.status] || t.status;
       const sc = colorMap[t.status] || 'var(--slate-light)';
-      const fmtLabel = t.download_type === 'zip' ? 'ZIP' : '图片';
+      const fmtMap = { folder: '图片', zip: 'ZIP', pdf: 'PDF', long_img: '长图' };
+      const fmtLabel = fmtMap[t.download_type] || t.download_type;
       return `
         <div class="dl-item">
           <span class="dl-id">JM${t.album_id}</span>

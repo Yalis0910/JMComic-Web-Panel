@@ -1,5 +1,5 @@
 let currentPage = 'dashboard';
-let state = { isLoggedIn: false, username: '', searchPage: 1, rankingPage: 1, rankingType: 'day', favPage: 1 };
+let state = { isLoggedIn: false, username: '', searchPage: 1, rankingPage: 1, rankingType: 'day', favPage: 1, categoryPage: 1 };
 let prevTaskStates = {};
 let selectedAlbums = new Set();
 let currentFavAlbums = [];
@@ -49,6 +49,12 @@ function collectPageState() {
       return {
         type: document.querySelector('.rank-tab.active')?.dataset?.type || 'day',
       };
+    case 'category':
+      return {
+        category: document.getElementById('categorySelect')?.value,
+        orderBy: document.getElementById('categoryOrderBy')?.value,
+        time: document.getElementById('categoryTime')?.value,
+      };
     case 'favorites':
       return { folderId: currentFavFolderId };
     default:
@@ -59,6 +65,10 @@ function collectPageState() {
 function restorePageState(page, extra, pageNum) {
   switch (page) {
     case 'search':
+      if (!state.searchQuery) {
+        document.getElementById('searchGrid').innerHTML = '<p class="empty-state">输入关键词开始搜索</p>';
+        break;
+      }
       if (extra?.type) document.getElementById('searchType').value = extra.type;
       if (extra?.orderBy) document.getElementById('searchOrderBy').value = extra.orderBy;
       if (extra?.time) document.getElementById('searchTime').value = extra.time;
@@ -68,6 +78,9 @@ function restorePageState(page, extra, pageNum) {
       state.rankingType = extra?.type || 'day';
       state.rankingPage = pageNum || 1;
       loadRanking(state.rankingType, state.rankingPage);
+      break;
+    case 'category':
+      loadCategory(pageNum || 1);
       break;
     case 'favorites':
       if (extra?.folderId) currentFavFolderId = extra.folderId;
@@ -115,6 +128,10 @@ function doSearch(query, page) {
   const orderBy = document.getElementById('searchOrderBy')?.value || 'mr';
   const time = document.getElementById('searchTime')?.value || 'a';
 
+  const typeLabel = { all: '', author: '作者·', tag: '标签·' }[type] || '';
+  const titleEl = document.querySelector('#page-search .page-title');
+  if (titleEl) titleEl.textContent = `搜索结果 · ${typeLabel}${query}`;
+
   document.getElementById('searchGrid').innerHTML = Components.gridSpinner();
 
   let promise;
@@ -131,8 +148,27 @@ function doSearch(query, page) {
   });
 }
 
+function searchByAuthor(name) {
+  pageStack.push({ page: currentPage, extra: collectPageState(), pageNum: state.searchPage });
+  document.getElementById('searchType').value = 'author';
+  navigateTo('search');
+  doSearch(name, 1);
+}
+
+function searchByTag(tag) {
+  pageStack.push({ page: currentPage, extra: collectPageState(), pageNum: state.searchPage });
+  document.getElementById('searchType').value = 'tag';
+  navigateTo('search');
+  doSearch(tag, 1);
+}
+
 document.addEventListener('change', (e) => {
-  if ((e.target.id === 'searchType' || e.target.id === 'searchOrderBy' || e.target.id === 'searchTime') && state.searchQuery) {
+  const catIds = ['categorySelect', 'categoryOrderBy', 'categoryTime'];
+  if (catIds.includes(e.target.id)) {
+    loadCategory(1);
+  } else if (e.target.id === 'rankCategory') {
+    loadRanking(state.rankingType, 1);
+  } else if ((e.target.id === 'searchType' || e.target.id === 'searchOrderBy' || e.target.id === 'searchTime') && state.searchQuery) {
     state.searchPage = 1;
     doSearch(state.searchQuery, 1);
   }
@@ -144,9 +180,11 @@ function loadRanking(type, page = 1) {
   document.querySelectorAll('.rank-tab').forEach(t => t.classList.remove('active'));
   document.querySelector(`.rank-tab[data-type="${type}"]`)?.classList.add('active');
 
+  const category = document.getElementById('rankCategory')?.value || 'ALL';
+
   document.getElementById('rankingGrid').innerHTML = Components.gridSpinner();
 
-  API.getRanking(type, page).then(data => {
+  API.getRanking(type, page, category).then(data => {
     Components.renderAlbumGrid(data.albums, 'rankingGrid');
     Components.renderPagination(data.total, data.page_count, page, 'rankingPagination',
       `loadRanking('${type}',`);
@@ -163,9 +201,27 @@ document.querySelectorAll('.rank-tab').forEach(tab => {
   });
 });
 
+function loadCategory(page = 1) {
+  state.categoryPage = page;
+  const category = document.getElementById('categorySelect')?.value || 'ALL';
+  const orderBy = document.getElementById('categoryOrderBy')?.value || 'view';
+  const time = document.getElementById('categoryTime')?.value || 'ALL';
+
+  document.getElementById('categoryGrid').innerHTML = Components.gridSpinner();
+
+  API.getCategory(page, time, orderBy, category).then(data => {
+    Components.renderAlbumGrid(data.albums, 'categoryGrid');
+    Components.renderPagination(data.total, data.page_count, page, 'categoryPagination',
+      'loadCategory(');
+  }).catch(err => {
+    document.getElementById('categoryGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
+  });
+}
+
 function showAlbumDetail(albumId) {
   const pageNum = currentPage === 'search' ? state.searchPage
     : currentPage === 'ranking' ? state.rankingPage
+    : currentPage === 'category' ? state.categoryPage
     : currentPage === 'favorites' ? state.favPage
     : 1;
   pageStack.push({ page: currentPage, extra: collectPageState(), pageNum });
@@ -233,6 +289,27 @@ function showToast(msg, isError = false) {
   setTimeout(() => toast.remove(), 3000);
 }
 
+document.getElementById('exportFavBtn')?.addEventListener('click', () => {
+  if (!state.isLoggedIn) { showToast('请先登录', true); return; }
+  API.exportFavorites().then(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'jm_favorites.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('导出成功');
+  }).catch(err => showToast('导出失败：' + err.message, true));
+});
+
+document.getElementById('clearHistoryBtn')?.addEventListener('click', () => {
+  if (!confirm('确定清除所有下载历史？')) return;
+  API.clearDownloadHistory().then(() => {
+    showToast('下载历史已清除');
+    loadDownloadTasks();
+  }).catch(err => showToast('清除失败：' + err.message, true));
+});
+
 document.getElementById('startDownloadBtn')?.addEventListener('click', () => {
   const albumId = document.getElementById('downloadAlbumId').value.trim();
   if (!albumId) { showToast('请输入漫画 ID', true); return; }
@@ -248,7 +325,8 @@ function loadDownloadTasks() {
     tasks.forEach(t => {
       const prev = prevTaskStates[t.task_id];
       if (prev && prev !== 'completed' && t.status === 'completed') {
-        showToast(`JM${t.album_id} 下载完成${t.download_type === 'zip' ? '（ZIP）' : ''}`);
+        const fmtLabel = { folder: '', zip: '（ZIP）', pdf: '（PDF）', long_img: '（长图）' };
+        showToast(`JM${t.album_id} 下载完成${fmtLabel[t.download_type] || ''}`);
       }
       prevTaskStates[t.task_id] = t.status;
     });
@@ -312,6 +390,38 @@ function batchDownload(format) {
   });
 }
 
+function batchAddFav() {
+  if (selectedAlbums.size === 0) return;
+  const folderId = document.getElementById('batchFavFolder')?.value || '0';
+  const ids = [...selectedAlbums];
+  showToast(`正在添加到文件夹...`);
+  let success = 0;
+  Promise.all(ids.map(aid =>
+    API.addFavorite(aid, folderId).then(() => { success++; }).catch(() => {})
+  )).then(() => {
+    showToast(`已完成 ${success}/${ids.length} 本添加到文件夹`);
+    selectedAlbums.clear();
+    updateBatchBar();
+    loadFavorites(state.favPage);
+  });
+}
+
+function populateBatchFavFolder(folders) {
+  const select = document.getElementById('batchFavFolder');
+  const btn = document.getElementById('batchFavBtn');
+  if (!select || !btn) return;
+  if (!folders || folders.length === 0) {
+    select.style.display = 'none';
+    btn.style.display = 'none';
+    return;
+  }
+  select.innerHTML = folders.map(f =>
+    `<option value="${f.folder_id}">${f.name}</option>`
+  ).join('');
+  select.style.display = '';
+  btn.style.display = '';
+}
+
 let currentFavFolderId = '0';
 
 function loadFavorites(page) {
@@ -327,6 +437,7 @@ function loadFavorites(page) {
     document.getElementById('favFolderBar').style.display = 'none';
     document.getElementById('favoriteGrid').innerHTML = '';
     document.getElementById('favoritePagination').innerHTML = '';
+    populateBatchFavFolder([]);
     return;
   }
 
@@ -359,6 +470,7 @@ function loadFavorites(page) {
     } else {
       folderBar.style.display = 'none';
     }
+    populateBatchFavFolder(data.folders || []);
   }).catch(err => {
     document.getElementById('favoriteGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
@@ -415,6 +527,7 @@ function loadConfig() {
     syncConfigToForm(config);
     document.getElementById('configEditor').value = JSON.stringify(config, null, 2);
   });
+  renderTagManager();
   const listCb = document.getElementById('settingShowListCover');
   if (listCb) listCb.checked = localStorage.getItem('ui_show_list_cover') === 'true';
   const detailCb = document.getElementById('settingShowDetailCover');
@@ -451,8 +564,56 @@ document.getElementById('settingPreloadCount')?.addEventListener('change', funct
   localStorage.setItem('reader_preloadCount', this.value);
 });
 
+const DEFAULT_TAGS = ['同人', '單行本', '全彩', '無修正', '中文', '短篇', '韓漫'];
+
+function getTags() {
+  try {
+    return JSON.parse(localStorage.getItem('dashboard_tags')) || DEFAULT_TAGS;
+  } catch { return DEFAULT_TAGS; }
+}
+
+function saveTags(tags) {
+  localStorage.setItem('dashboard_tags', JSON.stringify(tags));
+  renderTagManager();
+}
+
+function renderTagManager() {
+  const container = document.getElementById('tagManagerList');
+  if (!container) return;
+  const tags = getTags();
+  if (tags.length === 0) {
+    container.innerHTML = '<span class="tag-manager-empty">暂无标签</span>';
+    return;
+  }
+  container.innerHTML = tags.map(t =>
+    `<span class="tag-manager-item">${escapeHtml(t)}<span class="tag-del" data-tag="${escapeHtml(t)}">×</span></span>`
+  ).join('');
+  container.querySelectorAll('.tag-del').forEach(el => {
+    el.addEventListener('click', function () {
+      const tag = this.dataset.tag;
+      const current = getTags();
+      saveTags(current.filter(t => t !== tag));
+    });
+  });
+}
+
+document.getElementById('tagManagerAddBtn')?.addEventListener('click', function () {
+  const input = document.getElementById('tagManagerInput');
+  const tag = input.value.trim();
+  if (!tag) return;
+  const current = getTags();
+  if (current.includes(tag)) return;
+  current.push(tag);
+  saveTags(current);
+  input.value = '';
+});
+
 function loadDashboard() {
-  const tags = ['全彩', '無修正', '中文', '同人', '單行本'];
+  const tags = getTags();
+  if (tags.length === 0) {
+    document.getElementById('quickTags').innerHTML = '<span class="tag-manager-empty">暂无标签，请在设置中添加</span>';
+    return;
+  }
   document.getElementById('quickTags').innerHTML = tags.map(t =>
     `<span class="tag-item" onclick="document.getElementById('searchInput').value='${t}';document.getElementById('searchBtn').click();">${t}</span>`
   ).join('');

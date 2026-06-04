@@ -1,4 +1,6 @@
+import csv, io
 from fastapi import APIRouter, HTTPException, Query, Body
+from fastapi.responses import StreamingResponse
 from jmcomic import JmOption, JmcomicText
 from jmweb.utils.session import session
 
@@ -91,6 +93,59 @@ async def get_favorites(
                 kw.setdefault("username", session.username)
             result = client.favorite_folder(page=page, folder_id=folder_id, **kw)
             return {"code": 0, "data": _format_favorites(result), "message": "success"}
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/user/favorites/export")
+async def export_favorites():
+    client = session.get_client()
+    if client is None:
+        raise HTTPException(status_code=401, detail="未登录，请先登录")
+
+    try:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['folder_id', 'folder_name', 'album_id', 'title', 'author'])
+
+        root_page = client.favorite_folder(page=1)
+        folders = list(root_page.iter_folder_id_name())
+        folders.insert(0, ('0', '全部'))
+
+        for fid, fname in folders:
+            for page_data in client.favorite_folder_gen(folder_id=fid):
+                for aid, info in page_data.content:
+                    writer.writerow([fid, fname, aid, info.get('name', ''), info.get('author', '')])
+
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=jm_favorites.csv"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        if _is_session_expired(e):
+            client = _handle_session_expired()
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['folder_id', 'folder_name', 'album_id', 'title', 'author'])
+
+            root_page = client.favorite_folder(page=1)
+            folders = list(root_page.iter_folder_id_name())
+            folders.insert(0, ('0', '全部'))
+
+            for fid, fname in folders:
+                for page_data in client.favorite_folder_gen(folder_id=fid):
+                    for aid, info in page_data.content:
+                        writer.writerow([fid, fname, aid, info.get('name', ''), info.get('author', '')])
+
+            output.seek(0)
+            return StreamingResponse(
+                iter([output.getvalue()]),
+                media_type="text/csv",
+                headers={"Content-Disposition": "attachment; filename=jm_favorites.csv"},
+            )
         raise HTTPException(status_code=500, detail=str(e))
 
 

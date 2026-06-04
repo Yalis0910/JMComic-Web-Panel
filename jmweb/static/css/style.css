@@ -513,6 +513,23 @@ body {
   border-radius: 100px;
   font-size: 13px;
   color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.detail-tag:hover {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+.detail-link {
+  color: var(--vermillion);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+.detail-link:hover {
+  text-decoration: underline;
+  color: var(--vermillion-dark);
 }
 
 .detail-actions {
@@ -898,6 +915,38 @@ body {
   color: var(--slate-light);
   margin-top: 4px;
   margin-left: 120px;
+}
+
+.tag-manager-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 32px;
+}
+.tag-manager-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--paper-dim);
+  border-radius: 100px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.tag-manager-item .tag-del {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  color: var(--slate-light);
+  transition: color 0.2s;
+}
+.tag-manager-item .tag-del:hover {
+  color: var(--error);
+}
+.tag-manager-empty {
+  font-size: 13px;
+  color: var(--slate-light);
+  padding: 4px 0;
 }
 
 .save-btn {

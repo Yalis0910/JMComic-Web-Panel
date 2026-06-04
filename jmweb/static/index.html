@@ -21,6 +21,8 @@
         <nav class="main-nav">
           <a class="nav-item active" data-page="dashboard">仪表盘</a>
           <a class="nav-item" data-page="ranking">排行榜</a>
+          <a class="nav-item" data-page="category">分类</a>
+          <a class="nav-item" data-page="search">搜索</a>
           <a class="nav-item" data-page="downloads">下载</a>
           <a class="nav-item" data-page="favorites">收藏</a>
           <a class="nav-item" data-page="settings">设置</a>
@@ -90,8 +92,48 @@
           <button class="rank-tab" data-type="week">本周</button>
           <button class="rank-tab" data-type="month">本月</button>
         </div>
+        <div class="filter-bar" style="margin-top:-16px;">
+          <select id="rankCategory" class="filter-select">
+            <option value="ALL">全部分类</option>
+            <option value="doujin">同人</option>
+            <option value="single">單行本</option>
+            <option value="short">短篇</option>
+            <option value="hanman">韓漫</option>
+            <option value="meiman">美漫</option>
+            <option value="another">其他</option>
+          </select>
+        </div>
         <div class="manga-grid" id="rankingGrid"></div>
         <div class="page-nav" id="rankingPagination"></div>
+      </section>
+
+      <section id="page-category" class="page">
+        <div class="page-header">
+          <h1 class="page-title">分类浏览</h1>
+          <div class="title-decoration"></div>
+        </div>
+        <div class="filter-bar">
+          <select id="categorySelect" class="filter-select">
+            <option value="ALL">全部分类</option>
+            <option value="同人">同人</option>
+            <option value="單行本">單行本</option>
+            <option value="短篇">短篇</option>
+            <option value="韓漫">韓漫</option>
+          </select>
+          <select id="categoryOrderBy" class="filter-select">
+            <option value="view">最多观看</option>
+            <option value="fav">最多收藏</option>
+            <option value="mr">最新发布</option>
+          </select>
+          <select id="categoryTime" class="filter-select">
+            <option value="ALL">全部时间</option>
+            <option value="t">今天</option>
+            <option value="w">本周</option>
+            <option value="m">本月</option>
+          </select>
+        </div>
+        <div class="manga-grid" id="categoryGrid"></div>
+        <div class="page-nav" id="categoryPagination"></div>
       </section>
 
       <section id="page-search" class="page">
@@ -137,8 +179,11 @@
           <select id="downloadFormatSelectGlobal" class="dl-select">
             <option value="folder">图片文件夹</option>
             <option value="zip">ZIP 压缩包</option>
+            <option value="pdf">PDF 文档</option>
+            <option value="long_img">长图 PNG</option>
           </select>
           <button id="startDownloadBtn" class="dl-btn">添加任务</button>
+          <button id="clearHistoryBtn" class="dl-btn" style="background:var(--slate-light);">清除历史</button>
         </div>
         <div class="dl-list" id="downloadList"></div>
       </section>
@@ -149,6 +194,9 @@
           <div class="title-decoration"></div>
         </div>
         <div id="favoritesStatus"></div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <button class="action-btn" id="exportFavBtn" style="padding:8px 20px;font-size:13px;background:var(--slate);">导出 CSV</button>
+        </div>
         <div class="filter-bar" id="favFolderBar" style="display:none;">
           <select id="favFolderSelect" class="filter-select">
             <option value="0">全部文件夹</option>
@@ -162,9 +210,15 @@
             <select id="batchFormat" class="batch-select">
               <option value="folder">图片文件夹</option>
               <option value="zip">ZIP 压缩包</option>
+              <option value="pdf">PDF 文档</option>
+              <option value="long_img">长图 PNG</option>
             </select>
             <button class="batch-btn batch-btn-primary" onclick="batchDownload(document.getElementById('batchFormat').value)">
               批量下载
+            </button>
+            <select id="batchFavFolder" class="batch-select" style="display:none;" disabled></select>
+            <button class="batch-btn batch-btn-primary" id="batchFavBtn" style="display:none;" onclick="batchAddFav()">
+              添加到文件夹
             </button>
           </div>
         </div>
@@ -201,7 +255,8 @@
             </div>
           </div>
           <div class="settings-block">
-            <h3 class="block-title">界面设置</h3>
+            <h3 class="block-title">界面设置 (本地)</h3>
+            <p class="setting-hint" style="margin-left:0;margin-bottom:16px;font-size:12px;color:var(--slate-light);">此设置仅保存在浏览器中，更改即时生效，无需点击保存</p>
             <div class="setting-row">
               <label class="setting-label">列表封面</label>
               <input type="checkbox" id="settingShowListCover" class="setting-checkbox">
@@ -218,9 +273,20 @@
               <label class="setting-label">预加载张数</label>
               <input type="number" id="settingPreloadCount" class="setting-input" value="8" min="0" max="50">
             </div>
+            <div class="setting-row" style="align-items:flex-start;">
+              <label class="setting-label" style="padding-top:4px;">快速标签</label>
+              <div style="flex:1;">
+                <div id="tagManagerList" class="tag-manager-list"></div>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                  <input type="text" id="tagManagerInput" class="setting-input" placeholder="输入标签名称" style="flex:1;">
+                  <button id="tagManagerAddBtn" class="dl-btn" style="white-space:nowrap;">添加</button>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="settings-block">
-            <h3 class="block-title">配置文件</h3>
+            <h3 class="block-title">配置文件 (服务器)</h3>
+            <p class="setting-hint" style="margin-left:0;margin-bottom:16px;font-size:12px;color:var(--slate-light);">编辑 option.yml 并保存到服务器</p>
             <textarea id="configEditor" class="config-textarea" rows="12"></textarea>
             <button id="saveConfigBtn" class="save-btn">保存配置</button>
           </div>

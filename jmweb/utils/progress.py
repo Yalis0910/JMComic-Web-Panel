@@ -34,6 +34,7 @@ class DownloadManager:
                 cls._instance = super().__new__(cls)
                 cls._instance._tasks: Dict[str, DownloadTask] = {}
                 cls._instance._task_lock = threading.Lock()
+                cls._instance._stop_events: Dict[str, threading.Event] = {}
                 cls._instance._load_from_file()
             return cls._instance
 
@@ -43,6 +44,7 @@ class DownloadManager:
         task = DownloadTask(task_id=task_id, album_id=album_id)
         with self._task_lock:
             self._tasks[task_id] = task
+            self._stop_events[task_id] = threading.Event()
         self._save_to_file()
         return task
 
@@ -77,8 +79,25 @@ class DownloadManager:
         task = self.get_task(task_id)
         if task:
             task.status = "cancelled"
+            with self._task_lock:
+                event = self._stop_events.get(task_id)
+                if event:
+                    event.set()
         self._save_to_file()
 
+    def get_stop_event(self, task_id: str) -> Optional[threading.Event]:
+        with self._task_lock:
+            return self._stop_events.get(task_id)
+
+    def cleanup_task(self, task_id: str):
+        with self._task_lock:
+            self._stop_events.pop(task_id, None)
+
+    def clear_history(self):
+        with self._task_lock:
+            self._tasks.clear()
+            self._stop_events.clear()
+        self._save_to_file()
 
     def _save_to_file(self):
         tasks_data = []

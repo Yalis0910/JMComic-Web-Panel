@@ -20,6 +20,9 @@ def _parse_photo_id_from_url(url: str) -> str:
     return m.group(1) if m else None
 
 
+_cache_headers = {"Cache-Control": "public, max-age=86400"}
+
+
 @router.get("/image/proxy")
 async def proxy_image(url: str = Query(...)):
     try:
@@ -42,7 +45,7 @@ async def proxy_image(url: str = Query(...)):
         # 无需解密的情况（num==0 或 .gif 图片）
         if num == 0 or JmcomicClient.img_is_not_need_to_decode(url, resp):
             content_type = resp.headers.get("content-type", "image/webp")
-            return Response(content=resp.content, media_type=content_type)
+            return Response(content=resp.content, media_type=content_type, headers=_cache_headers)
 
         # --- 解密图片：将打乱的条带重新拼回正确顺序 ---
         img = Image.open(BytesIO(resp.content))
@@ -66,7 +69,7 @@ async def proxy_image(url: str = Query(...)):
         buf = BytesIO()
         img_decode.save(buf, format="WEBP")
         buf.seek(0)
-        return Response(content=buf.getvalue(), media_type="image/webp")
+        return Response(content=buf.getvalue(), media_type="image/webp", headers=_cache_headers)
 
     except HTTPException:
         raise

@@ -160,12 +160,15 @@
 }
 
 .reader-progress-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   height: 3px;
   background-color: var(--reader-border, #ddd);
-  position: relative;
   cursor: pointer;
   transition: height 0.2s ease;
-  z-index: 600;
+  z-index: 601;
 }
 
 [data-theme="dark"] .reader-progress-bar {
@@ -204,6 +207,10 @@
 }
 
 .reader-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -211,6 +218,12 @@
   background-color: var(--reader-toolbar-bg, rgba(255,255,255,0.95));
   border-top: 1px solid var(--reader-border, #ddd);
   z-index: 600;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+
+.reader-bottom-bar.visible {
+  transform: translateY(0);
 }
 
 [data-theme="dark"] .reader-bottom-bar {

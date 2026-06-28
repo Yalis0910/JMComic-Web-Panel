@@ -477,6 +477,7 @@ class JmAlbumDetail(DetailEntity, Downloadable):
                  tags,
                  related_list=None,
                  description='',
+                 is_favorite=False,
                  ):
         super().__init__()
         self.album_id: str = str(album_id)
@@ -505,6 +506,7 @@ class JmAlbumDetail(DetailEntity, Downloadable):
 
         self.episode_list = episode_list
         self.related_list = related_list
+        self.is_favorite = is_favorite
 
     @property
     def author(self):

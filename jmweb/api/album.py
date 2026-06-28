@@ -112,6 +112,7 @@ async def get_album_detail(album_id: str):
                 "update_date": album.update_date,
                 "episodes": episodes,
                 "cover_url": cover_url,
+                "is_favorite": getattr(album, 'is_favorite', False),
             },
             "message": "success",
         }

@@ -24,8 +24,11 @@ class ZoomManager {
 
   apply() {
     const imageList = DOM.$('#reader-image-list');
+    imageList.style.transform = 'none';
+    const naturalH = imageList.scrollHeight;
     imageList.style.transform = `scale(${this.level})`;
     imageList.style.transformOrigin = 'top center';
+    imageList.style.height = `${naturalH * this.level}px`;
   }
 
   updateUI() {

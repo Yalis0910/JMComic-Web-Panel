@@ -4,6 +4,7 @@ let prevTaskStates = {};
 let selectedAlbums = new Set();
 let currentFavAlbums = [];
 let pageStack = [];
+let _currentAlbumId = null;
 
 function navigateTo(page) {
   const readerScreen = document.getElementById('page-reader');
@@ -56,7 +57,7 @@ function collectPageState() {
         time: document.getElementById('categoryTime')?.value,
       };
     case 'favorites':
-      return { folderId: currentFavFolderId };
+      return { folderId: currentFavFolderId, sort: currentFavSort };
     default:
       return {};
   }
@@ -84,6 +85,7 @@ function restorePageState(page, extra, pageNum) {
       break;
     case 'favorites':
       if (extra?.folderId) currentFavFolderId = extra.folderId;
+      if (extra?.sort) currentFavSort = extra.sort;
       state.favPage = pageNum || 1;
       loadFavorites(state.favPage);
       break;
@@ -226,6 +228,7 @@ function showAlbumDetail(albumId) {
     : 1;
   pageStack.push({ page: currentPage, extra: collectPageState(), pageNum });
   navigateTo('detail');
+  _currentAlbumId = albumId;
   document.getElementById('albumDetail').innerHTML = '<p class="empty-state">加载中...</p>';
 
   API.getAlbum(albumId).then(data => {
@@ -233,6 +236,13 @@ function showAlbumDetail(albumId) {
   }).catch(err => {
     document.getElementById('albumDetail').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
   });
+}
+
+function refreshAlbumDetail() {
+  if (!_currentAlbumId) return;
+  API.getAlbum(_currentAlbumId).then(data => {
+    Components.renderAlbumDetail(data);
+  }).catch(() => {});
 }
 
 function openReader(photoId, albumId, title) {
@@ -269,12 +279,31 @@ function cancelDownload(taskId) {
   API.cancelDownload(taskId).then(() => loadDownloadTasks());
 }
 
-function addFav(albumId) {
+function updateFavButtons(isFav) {
+  const favGroup = document.getElementById('favGroup');
+  const removeBtn = document.getElementById('favRemoveBtn');
+  if (favGroup) favGroup.style.display = isFav ? 'none' : 'inline-flex';
+  if (removeBtn) removeBtn.style.display = isFav ? '' : 'none';
+}
+
+function toggleFav(albumId, isFavorited) {
   if (!state.isLoggedIn) {
     showLoginModal();
     return;
   }
-  API.addFavorite(albumId).then(() => showToast('已添加到收藏')).catch(e => showToast('收藏失败：' + e.message, true));
+
+  if (isFavorited) {
+    if (!confirm('确定取消收藏？')) return;
+    API.removeFavorite(albumId)
+      .then(() => { updateFavButtons(false); showToast('已取消收藏'); })
+      .catch(e => { showToast('取消失败：' + e.message, true); refreshAlbumDetail(); });
+  } else {
+    const folderSel = document.getElementById('favFolderSelect');
+    const folderId = folderSel ? folderSel.value : '0';
+    API.addFavorite(albumId, folderId)
+      .then(() => { updateFavButtons(true); showToast('已添加到收藏'); })
+      .catch(e => { showToast('收藏失败：' + e.message, true); refreshAlbumDetail(); });
+  }
 }
 
 function showToast(msg, isError = false) {
@@ -320,7 +349,7 @@ document.getElementById('startDownloadBtn')?.addEventListener('click', () => {
   }).catch(err => showToast(`创建失败：${err.message}`, true));
 });
 
-function loadDownloadTasks() {
+function pollDownloadTasks() {
   API.getDownloadTasks().then(tasks => {
     tasks.forEach(t => {
       const prev = prevTaskStates[t.task_id];
@@ -330,13 +359,39 @@ function loadDownloadTasks() {
       }
       prevTaskStates[t.task_id] = t.status;
     });
-    Components.renderDownloadTasks(tasks);
+    updateFloatBar(tasks);
+    if (currentPage === 'downloads') Components.renderDownloadTasks(tasks);
   });
 }
 
-setInterval(() => {
-  if (currentPage === 'downloads') loadDownloadTasks();
-}, 2000);
+function loadDownloadTasks() {
+  pollDownloadTasks();
+}
+
+function updateFloatBar(tasks) {
+  const running = tasks.filter(t => t.status === 'running');
+  const bar = document.getElementById('dlFloatBar');
+  if (!bar) return;
+  if (running.length === 0) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  document.getElementById('dlFloatSummary').textContent = `下载中 (${running.length})`;
+  document.getElementById('dlFloatList').innerHTML = running.map(t => `
+    <div class="dl-item">
+      <span class="dl-id">JM${t.album_id}</span>
+      <div class="dl-progress"><div class="dl-progress-fill" style="width:${t.progress}%;background:var(--slate);"></div></div>
+      <span class="dl-status" style="color:var(--slate);">${t.progress}%</span>
+    </div>
+  `).join('');
+}
+
+setInterval(pollDownloadTasks, 3000);
+
+document.getElementById('dlFloatHeader')?.addEventListener('click', () => {
+  const body = document.getElementById('dlFloatBody');
+  const toggle = document.getElementById('dlFloatToggle');
+  body.classList.toggle('hidden');
+  toggle.classList.toggle('open');
+});
 
 function toggleSelect(albumId) {
   if (selectedAlbums.has(albumId)) {
@@ -423,6 +478,7 @@ function populateBatchFavFolder(folders) {
 }
 
 let currentFavFolderId = '0';
+let currentFavSort = 'mr';
 
 function loadFavorites(page) {
   state.favPage = page;
@@ -444,7 +500,7 @@ function loadFavorites(page) {
   statusEl.innerHTML = '';
   selectedAlbums.clear();
   document.getElementById('favoriteGrid').innerHTML = Components.gridSpinner();
-  API.getFavorites(page, currentFavFolderId).then(data => {
+  API.getFavorites(page, currentFavFolderId, currentFavSort).then(data => {
     currentFavAlbums = data.albums;
     Components.renderAlbumGrid(data.albums, 'favoriteGrid', {
       selectable: true, selected: selectedAlbums,
@@ -455,6 +511,7 @@ function loadFavorites(page) {
 
     const folderBar = document.getElementById('favFolderBar');
     const folderSelect = document.getElementById('favFolderSelect');
+    const sortSelect = document.getElementById('favSortSelect');
     const currentVal = folderSelect.value;
     folderSelect.innerHTML = '<option value="0">全部文件夹</option>';
     if (data.folders && data.folders.length > 0) {
@@ -470,6 +527,7 @@ function loadFavorites(page) {
     } else {
       folderBar.style.display = 'none';
     }
+    sortSelect.value = currentFavSort;
     populateBatchFavFolder(data.folders || []);
   }).catch(err => {
     document.getElementById('favoriteGrid').innerHTML = `<p class="error-state">加载失败：${err.message}</p>`;
@@ -479,6 +537,10 @@ function loadFavorites(page) {
 document.addEventListener('change', (e) => {
   if (e.target.id === 'favFolderSelect') {
     currentFavFolderId = e.target.value;
+    loadFavorites(1);
+  }
+  if (e.target.id === 'favSortSelect') {
+    currentFavSort = e.target.value;
     loadFavorites(1);
   }
 });

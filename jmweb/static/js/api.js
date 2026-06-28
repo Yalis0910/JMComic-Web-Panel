@@ -75,8 +75,8 @@ const API = {
     return this.request('/user/logout', { method: 'POST' });
   },
   getLoginStatus() { return this.request('/user/status'); },
-  getFavorites(page = 1, folderId = '0') {
-    return this.request(`/user/favorites?page=${page}&folder_id=${folderId}`);
+  getFavorites(page = 1, folderId = '0', orderBy = 'mr') {
+    return this.request(`/user/favorites?page=${page}&folder_id=${folderId}&order_by=${orderBy}`);
   },
   exportFavorites() {
     return fetch(`${this.baseURL}/user/favorites/export`).then(resp => {
@@ -90,5 +90,17 @@ const API = {
       method: 'POST',
       body: JSON.stringify({ folder_id: folderId }),
     });
+  },
+
+  removeFavorite(albumId) {
+    return this.request(`/user/favorites/${albumId}`, { method: 'DELETE' });
+  },
+
+  checkFavorite(albumId) {
+    return this.request(`/user/favorites/check/${albumId}`);
+  },
+
+  getFolders() {
+    return this.request('/user/folders');
   },
 };

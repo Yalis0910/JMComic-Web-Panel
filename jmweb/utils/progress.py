@@ -22,6 +22,10 @@ class DownloadTask:
     created_at: float = field(default_factory=time.time)
     thread: Optional[threading.Thread] = None
     download_type: str = "folder"
+    current_chapter_index: int = 0
+    total_chapters: int = 0
+    current_chapter_completed: int = 0
+    current_chapter_total: int = 0
 
 
 class DownloadManager:
@@ -59,12 +63,18 @@ class DownloadManager:
                 for t in self._tasks.values()
             ]
 
-    def update_progress(self, task_id: str, completed: int, total: int):
+    def update_progress(self, task_id: str, completed: int, total: int,
+                        chapter_index: int = 0, total_chapters: int = 0,
+                        chapter_completed: int = 0, chapter_total: int = 0):
         task = self.get_task(task_id)
         if task:
             task.completed_count = completed
             task.total_count = total
             task.progress = int(completed / total * 100) if total > 0 else 0
+            task.current_chapter_index = chapter_index
+            task.total_chapters = total_chapters
+            task.current_chapter_completed = chapter_completed
+            task.current_chapter_total = chapter_total
             self._save_to_file()
 
     def complete_task(self, task_id: str, error: Optional[str] = None):

@@ -79,6 +79,7 @@ const Components = {
         </div>
       </div>`).join('');
     const loggedIn = state.isLoggedIn;
+    const isFav = album.is_favorite === true;
 
     container.innerHTML = `
       <div class="detail-frame">
@@ -104,7 +105,13 @@ const Components = {
               <option value="long_img">长图 PNG</option>
             </select>
             <button class="action-btn" onclick="downloadAlbumWithFormat('${album.album_id}')">下载本子</button>
-            <button class="action-btn action-alt" onclick="addFav('${album.album_id}')">${loggedIn ? '收藏' : '登录后收藏'}</button>
+            ${loggedIn
+              ? `<span id="favGroup" class="fav-group" style="display:${isFav ? 'none' : 'inline-flex'};">
+                   <select id="favFolderSelect" class="action-select"><option value="0">默认收藏夹</option></select>
+                   <button id="favToggleBtn" class="action-btn action-alt" data-fav="0" onclick="toggleFav('${album.album_id}', false)">收藏</button>
+                 </span>
+                 <button id="favRemoveBtn" class="action-btn action-faved" style="display:${isFav ? '' : 'none'};" onclick="toggleFav('${album.album_id}', true)">已收藏 ✓</button>`
+              : `<button class="action-btn action-alt" onclick="showLoginModal()">登录后收藏</button>`}
           </div>
         </div>
       </div>
@@ -115,6 +122,24 @@ const Components = {
         </div>
       ` : ''}
     `;
+
+    if (loggedIn) {
+      API.checkFavorite(album.album_id).then(data => {
+        const isFav = data && data.is_favorite;
+        updateFavButtons(isFav);
+      }).catch(() => {});
+      API.getFolders().then(data => {
+        const sel = document.getElementById('favFolderSelect');
+        if (!sel) return;
+        const folders = data && data.folders || [];
+        folders.forEach(f => {
+          const opt = document.createElement('option');
+          opt.value = f.folder_id;
+          opt.textContent = f.name;
+          sel.appendChild(opt);
+        });
+      }).catch(() => {});
+    }
   },
 
   renderDownloadTasks(tasks) {
@@ -130,10 +155,15 @@ const Components = {
       const sc = colorMap[t.status] || 'var(--slate-light)';
       const fmtMap = { folder: '图片', zip: 'ZIP', pdf: 'PDF', long_img: '长图' };
       const fmtLabel = fmtMap[t.download_type] || t.download_type;
+      const isMulti = t.total_chapters > 1;
+      const chapterInfo = isMulti && t.status === 'running'
+        ? `<span class="dl-chapter">第${t.current_chapter_index}/${t.total_chapters}章 (${t.current_chapter_completed}/${t.current_chapter_total}页)</span>`
+        : '';
       return `
         <div class="dl-item">
           <span class="dl-id">JM${t.album_id}</span>
           <span class="dl-type">${fmtLabel}</span>
+          ${chapterInfo}
           <div class="dl-progress"><div class="dl-progress-fill" style="width:${t.progress || 0}%;background:${sc};"></div></div>
           <span class="dl-status" style="color:${sc};">${st} ${t.progress || 0}%</span>
           ${t.status === 'running' ? `<button class="dl-cancel" onclick="cancelDownload('${t.task_id}')">取消</button>` : ''}

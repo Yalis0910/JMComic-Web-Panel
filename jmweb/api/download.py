@@ -12,8 +12,8 @@ router = APIRouter(tags=["download"])
 class _ProgressPlugin(JmOptionPlugin):
     plugin_key = '_progress'
 
-    def invoke(self, photo=None, downloader=None, **kwargs):
-        if photo is None:
+    def invoke(self, image=None, downloader=None, **kwargs):
+        if image is None:
             return
         task_id = getattr(self.option, '_progress_task_id', None)
         total = getattr(self.option, '_progress_total', 0)
@@ -24,9 +24,29 @@ class _ProgressPlugin(JmOptionPlugin):
         if stop_event and stop_event.is_set():
             raise Exception("cancelled")
 
+        photo = image.from_photo
+        album = photo.from_album
+
         with self.option._progress_lock:
-            self.option._progress_completed += len(photo)
-            manager.update_progress(task_id, self.option._progress_completed, total)
+            self.option._progress_completed += 1
+
+            current_photo_id = photo.id
+            prev_photo_id = getattr(self.option, '_progress_current_photo_id', None)
+            if current_photo_id != prev_photo_id:
+                self.option._progress_current_photo_id = current_photo_id
+                self.option._progress_chapter_completed = 0
+
+            self.option._progress_chapter_completed += 1
+
+            manager.update_progress(
+                task_id,
+                completed=self.option._progress_completed,
+                total=total,
+                chapter_index=photo.index,
+                total_chapters=len(album) if album else 1,
+                chapter_completed=self.option._progress_chapter_completed,
+                chapter_total=len(photo),
+            )
 
 
 def _build_option(option_path: str = None, download_type: str = "folder"):
@@ -87,9 +107,11 @@ def _do_download(task_id: str, album_id: str, option_path: str = None, download_
         option._progress_completed = 0
         option._progress_lock = threading.Lock()
         option._progress_stop_event = manager.get_stop_event(task_id)
+        option._progress_current_photo_id = None
+        option._progress_chapter_completed = 0
 
         JmModuleConfig.REGISTRY_PLUGIN['_progress'] = _ProgressPlugin
-        option.plugins.src_dict.setdefault('after_photo', []).insert(0, {
+        option.plugins.src_dict.setdefault('before_image', []).insert(0, {
             "plugin": "_progress",
             "kwargs": {},
         })
@@ -158,9 +180,11 @@ def _do_download_photo(task_id: str, photo_id: str, album_id: str, option_path: 
         option._progress_completed = 0
         option._progress_lock = threading.Lock()
         option._progress_stop_event = manager.get_stop_event(task_id)
+        option._progress_current_photo_id = None
+        option._progress_chapter_completed = 0
 
         JmModuleConfig.REGISTRY_PLUGIN['_progress'] = _ProgressPlugin
-        option.plugins.src_dict.setdefault('after_photo', []).insert(0, {
+        option.plugins.src_dict.setdefault('before_image', []).insert(0, {
             "plugin": "_progress",
             "kwargs": {},
         })

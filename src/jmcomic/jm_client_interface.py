@@ -244,6 +244,14 @@ class JmUserClient:
         """
         raise NotImplementedError
 
+    def remove_favorite_album(self,
+                              album_id,
+                              ):
+        """
+        把漫画移出收藏夹
+        """
+        raise NotImplementedError
+
 
 class JmImageClient:
 

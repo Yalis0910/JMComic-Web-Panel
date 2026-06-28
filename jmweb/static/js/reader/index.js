@@ -119,6 +119,26 @@ class MangaReader {
   prevPage() { if (this.currentIndex > 0) this.goTo(this.currentIndex - 1); }
   nextPage() { if (this.currentIndex < this.images.length - 1) this.goTo(this.currentIndex + 1); }
 
+  nextScreen() {
+    const container = DOM.$('#reader-container');
+    const zoomLevel = this.zoom.level;
+
+    if (zoomLevel <= 1) {
+      this.nextPage();
+      return;
+    }
+
+    const viewH = container.clientHeight;
+    const maxScroll = container.scrollHeight - viewH;
+
+    if (container.scrollTop >= maxScroll - 2) {
+      this.nextPage();
+      return;
+    }
+
+    container.scrollBy({ top: viewH, behavior: 'smooth' });
+  }
+
   toggleTheme() {
     this.theme = this.theme === 'light' ? 'dark' : 'light';
     this.applyTheme(this.theme);

@@ -269,6 +269,27 @@ class JmHtmlClient(AbstractJmClient):
 
         return resp
 
+    def remove_favorite_album(self,
+                              album_id,
+                              ):
+        resp = self.get_jm_html(
+            '/ajax/cancel_favorite_album',
+            data={'album_id': album_id},
+        )
+
+        res = resp.json()
+
+        if res.get('status', 0) != 1:
+            msg = parse_unicode_escape_text(res.get('msg', ''))
+            error_msg = PatternTool.match_or_default(msg, JmcomicText.pattern_ajax_favorite_msg, msg)
+
+            self.raise_request_error(
+                resp,
+                error_msg
+            )
+
+        return resp
+
     def get_album_detail(self, album_id) -> JmAlbumDetail:
         return self.fetch_detail_entity(album_id, 'album')
 
@@ -847,11 +868,29 @@ class JmApiClient(AbstractJmClient):
                            album_id,
                            folder_id='0',
                            ):
-        """
-        移动端没有提供folder_id参数
-        """
+        data = {
+            'aid': album_id,
+        }
+
+        if folder_id != '0':
+            data['fid'] = folder_id
+
         resp = self.req_api(
             '/favorite',
+            get=False,
+            data=data,
+        )
+
+        self.require_resp_status_ok(resp)
+
+        return resp
+
+    def remove_favorite_album(self,
+                              album_id,
+                              ):
+        resp = self.req_api(
+            '/favorite/cancel',
+            get=False,
             data={
                 'aid': album_id,
             },
@@ -867,8 +906,8 @@ class JmApiClient(AbstractJmClient):
         检查返回数据中的status字段是否为ok
         """
         data = resp.model_data
-        if data.status != 'ok':
-            ExceptionTool.raises_resp(data.msg, resp)
+        if 'status' in data and data.status != 'ok':
+            ExceptionTool.raises_resp(data.get('msg', ''), resp)
 
     def req_api(self, url, get=True, require_success=True, **kwargs) -> JmApiResp:
         ts = self.decide_headers_and_ts(kwargs, url)

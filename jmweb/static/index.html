@@ -201,6 +201,12 @@
           <select id="favFolderSelect" class="filter-select">
             <option value="0">全部文件夹</option>
           </select>
+          <select id="favSortSelect" class="filter-select">
+            <option value="mr">收藏日期</option>
+            <option value="mv">更新时间</option>
+            <option value="mp">人气</option>
+            <option value="tf">点赞</option>
+          </select>
         </div>
         <div class="fav-batch-bar" id="batchActions" style="display:none;">
           <span class="batch-info">已选 <strong id="selectedCount">0</strong> 本</span>
@@ -295,6 +301,17 @@
     </main>
   </div>
 
+  <div id="dlFloatBar" class="dl-float-bar hidden">
+    <div class="dl-float-header" id="dlFloatHeader">
+      <span class="dl-float-summary" id="dlFloatSummary">下载中 (0)</span>
+      <span class="dl-float-toggle" id="dlFloatToggle">▸</span>
+    </div>
+    <div class="dl-float-body hidden" id="dlFloatBody">
+      <div class="dl-float-list" id="dlFloatList"></div>
+      <div class="dl-float-footer" onclick="navigateTo('downloads')">管理全部下载 →</div>
+    </div>
+  </div>
+
   <div id="page-reader" class="reader-screen hidden">
     <div class="reader-toolbar" id="reader-toolbar">
       <div class="toolbar-top">
@@ -329,7 +346,7 @@
       <div class="reader-progress-thumb" id="reader-progress-thumb"></div>
     </div>
 
-    <div class="reader-bottom-bar">
+    <div class="reader-bottom-bar" id="reader-bottom-bar">
       <span class="page-info" id="reader-page-info">1 / 1</span>
       <button class="toolbar-btn" id="reader-btn-thumbnails" title="缩略图">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>

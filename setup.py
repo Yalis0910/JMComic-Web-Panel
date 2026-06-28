@@ -34,6 +34,7 @@ setup(
         'pycryptodome',
         'fastapi',
         'uvicorn',
+        'img2pdf',
     ],
     keywords=['python', 'jmcomic', '18comic', '禁漫天堂', 'NSFW'],
     classifiers=[

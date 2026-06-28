@@ -5,6 +5,7 @@ class ReaderToolbar {
     this.hideTimer = null;
     this.elements = {
       toolbar: DOM.$('#reader-toolbar'),
+      bottomBar: DOM.$('#reader-bottom-bar'),
       title: DOM.$('#reader-toolbar-title'),
     };
     this.bindEvents();
@@ -21,12 +22,14 @@ class ReaderToolbar {
 
   show() {
     DOM.addClass(this.elements.toolbar, 'visible');
+    DOM.addClass(this.elements.bottomBar, 'visible');
     this.visible = true;
     this.scheduleHide();
   }
 
   hide() {
     DOM.removeClass(this.elements.toolbar, 'visible');
+    DOM.removeClass(this.elements.bottomBar, 'visible');
     this.visible = false;
   }
 

@@ -28,7 +28,7 @@ class KeyboardManager {
       case 'PageDown':
       case ' ':
         e.preventDefault();
-        this.reader.nextPage();
+        this.reader.nextScreen();
         break;
       case 'Home':
         e.preventDefault();

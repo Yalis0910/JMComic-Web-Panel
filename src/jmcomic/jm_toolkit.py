@@ -791,6 +791,7 @@ class JmApiAdaptTool:
         fields['episode_list'] = episode_list
         for it in 'scramble_id', 'page_count', 'pub_date', 'update_date':
             fields[it] = '0'
+        fields['is_favorite'] = data.get('is_favorite', False)
 
     @classmethod
     def post_adapt_photo(cls, data: dict, _clazz: type, fields: dict):

@@ -55,18 +55,10 @@ class KeyboardManager {
         e.preventDefault();
         this.reader.zoom.out();
         break;
-      case 't':
-        e.preventDefault();
-        this.reader.toggleThumbnailPanel();
-        break;
     }
   }
 
   handleEscape() {
-    if (!DOM.hasClass(DOM.$('#reader-thumbnail-panel'), 'hidden')) {
-      DOM.hide(DOM.$('#reader-thumbnail-panel'));
-      return;
-    }
     if (document.fullscreenElement) {
       document.exitFullscreen();
     }

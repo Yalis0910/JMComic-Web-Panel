@@ -13,7 +13,6 @@ class MangaReader {
     this.keyboard = null;
     this.gesture = null;
     this.toolbar = null;
-    this.thumbnail = null;
 
     this.applyTheme(this.theme);
     this.initComponents();
@@ -27,7 +26,6 @@ class MangaReader {
     this.keyboard = new KeyboardManager(this);
     this.gesture = new GestureManager(this);
     this.toolbar = new ReaderToolbar(this);
-    this.thumbnail = new ThumbnailPanel(this);
   }
 
   bindScrollEvents() {
@@ -46,7 +44,6 @@ class MangaReader {
           });
           this.currentIndex = currentIndex;
           this.progress.update(currentIndex);
-          this.thumbnail.setActive(currentIndex);
           ticking = false;
         });
         ticking = true;
@@ -63,7 +60,6 @@ class MangaReader {
       this.albumId = albumId;
       this.progress.setTotal(this.images.length);
       this.render();
-      this.thumbnail.generate(this.images);
       this.toolbar.setTitle(title || `Photo ${photoId}`);
       navigateTo('reader');
       DOM.hideLoading();
@@ -83,7 +79,6 @@ class MangaReader {
       fragment.appendChild(wrapper);
     });
     imageList.appendChild(fragment);
-    // 切换本子时重置滚动位置到顶部
     DOM.$('#reader-container').scrollTop = 0;
   }
 
@@ -129,6 +124,7 @@ class MangaReader {
     }
 
     const viewH = container.clientHeight;
+    const scrollStep = viewH;
     const maxScroll = container.scrollHeight - viewH;
 
     if (container.scrollTop >= maxScroll - 2) {
@@ -136,7 +132,7 @@ class MangaReader {
       return;
     }
 
-    container.scrollBy({ top: viewH, behavior: 'smooth' });
+    container.scrollBy({ top: scrollStep, behavior: 'smooth' });
   }
 
   toggleTheme() {
@@ -165,16 +161,12 @@ class MangaReader {
     }
   }
 
-  toggleThumbnailPanel() { this.thumbnail.toggle(); }
-
   goBack() {
-    if (this.thumbnail.isVisible()) { this.thumbnail.hide(); return; }
     this.lazyLoader.reset();
     this.images = [];
     this.photoId = null;
     this.albumId = null;
     this.zoom.reset();
-    this.thumbnail.clear();
     DOM.$('#reader-image-list').innerHTML = '';
     DOM.$('#reader-container').scrollTop = 0;
     navigateTo('detail');

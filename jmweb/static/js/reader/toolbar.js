@@ -17,7 +17,6 @@ class ReaderToolbar {
     DOM.$('#reader-btn-zoom-in').addEventListener('click', () => this.reader.zoom.in());
     DOM.$('#reader-btn-theme').addEventListener('click', () => this.reader.toggleTheme());
     DOM.$('#reader-btn-fullscreen').addEventListener('click', () => this.reader.toggleFullscreen());
-    DOM.$('#reader-btn-thumbnails').addEventListener('click', () => this.reader.toggleThumbnailPanel());
   }
 
   show() {

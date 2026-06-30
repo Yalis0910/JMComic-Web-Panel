@@ -162,6 +162,11 @@ class MangaReader {
   }
 
   goBack() {
+    this.exitReader();
+    goBack();
+  }
+
+  exitReader() {
     this.lazyLoader.reset();
     this.images = [];
     this.photoId = null;
@@ -169,7 +174,6 @@ class MangaReader {
     this.zoom.reset();
     DOM.$('#reader-image-list').innerHTML = '';
     DOM.$('#reader-container').scrollTop = 0;
-    navigateTo('detail');
   }
 }
 

@@ -44,7 +44,22 @@ class KeyboardManager {
         this.reader.toggleFullscreen();
         break;
       case 'Escape':
-        this.handleEscape();
+        if (document.fullscreenElement) {
+          document.exitFullscreen();
+        } else {
+          this.reader.exitReader();
+          goBack();
+        }
+        break;
+      case 'Backspace':
+        e.preventDefault();
+        this.reader.exitReader();
+        goBack();
+        break;
+      case 'q':
+        e.preventDefault();
+        this.reader.exitReader();
+        goBack();
         break;
       case '+':
       case '=':
@@ -55,12 +70,6 @@ class KeyboardManager {
         e.preventDefault();
         this.reader.zoom.out();
         break;
-    }
-  }
-
-  handleEscape() {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
     }
   }
 }

@@ -12,7 +12,7 @@ class ReaderToolbar {
   }
 
   bindEvents() {
-    DOM.$('#reader-btn-back').addEventListener('click', () => this.reader.goBack());
+    DOM.$('#reader-btn-back').addEventListener('click', () => { this.reader.exitReader(); goBack(); });
     DOM.$('#reader-btn-zoom-out').addEventListener('click', () => this.reader.zoom.out());
     DOM.$('#reader-btn-zoom-in').addEventListener('click', () => this.reader.zoom.in());
     DOM.$('#reader-btn-theme').addEventListener('click', () => this.reader.toggleTheme());

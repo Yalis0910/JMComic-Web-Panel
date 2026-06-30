@@ -114,13 +114,20 @@ async def get_favorites(
         raise
     except Exception as e:
         if _is_session_expired(e):
-            client = _handle_session_expired()
-            kw = {"username": username} if username else {}
-            if session.username:
-                kw.setdefault("username", session.username)
-            result = client.favorite_folder(page=page, folder_id=folder_id, order_by=order_by, **kw)
-            return {"code": 0, "data": _format_favorites(result, order_by=order_by), "message": "success"}
-        raise HTTPException(status_code=500, detail=str(e))
+            try:
+                client = _handle_session_expired()
+                kw = {"username": username} if username else {}
+                if session.username:
+                    kw.setdefault("username", session.username)
+                result = client.favorite_folder(page=page, folder_id=folder_id, order_by=order_by, **kw)
+                return {"code": 0, "data": _format_favorites(result, order_by=order_by), "message": "success"}
+            except Exception as e2:
+                raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
+        if hasattr(e, 'args') and e.args:
+            detail = str(e.args[0]) if isinstance(e.args[0], dict) else str(e)
+        else:
+            detail = str(e)
+        raise HTTPException(status_code=500, detail=detail)
 
 
 @router.get("/user/favorites/export")
@@ -235,12 +242,15 @@ async def get_folders():
         raise
     except Exception as e:
         if _is_session_expired(e):
-            client = _handle_session_expired()
-            result = client.favorite_folder(page=1)
-            return {"code": 0, "data": {"folders": [
-                {"folder_id": fid, "name": fname}
-                for fid, fname in result.iter_folder_id_name()
-            ]}}
+            try:
+                client = _handle_session_expired()
+                result = client.favorite_folder(page=1)
+                return {"code": 0, "data": {"folders": [
+                    {"folder_id": fid, "name": fname}
+                    for fid, fname in result.iter_folder_id_name()
+                ]}}
+            except Exception:
+                raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -260,10 +270,13 @@ async def check_favorite(album_id: str):
         raise
     except Exception as e:
         if _is_session_expired(e):
-            client = _handle_session_expired()
-            result = client.favorite_folder(page=1)
-            for aid, info in result.content:
-                if str(aid) == str(album_id):
-                    return {"code": 0, "data": {"is_favorite": True}, "message": "success"}
-            return {"code": 0, "data": {"is_favorite": False}, "message": "success"}
+            try:
+                client = _handle_session_expired()
+                result = client.favorite_folder(page=1)
+                for aid, info in result.content:
+                    if str(aid) == str(album_id):
+                        return {"code": 0, "data": {"is_favorite": True}, "message": "success"}
+                return {"code": 0, "data": {"is_favorite": False}, "message": "success"}
+            except Exception:
+                return {"code": 0, "data": {"is_favorite": False}, "message": "登录已过期"}
         return {"code": 0, "data": {"is_favorite": False}, "message": str(e)}

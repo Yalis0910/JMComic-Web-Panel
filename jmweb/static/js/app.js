@@ -249,6 +249,13 @@ function openReader(photoId, albumId, title) {
   if (!mangaReader) {
     mangaReader = new MangaReader();
   }
+  if (currentPage !== 'reader') {
+    const pn = currentPage === 'search' ? state.searchPage
+              : currentPage === 'favorites' ? state.favPage
+              : currentPage === 'ranking' ? state.rankingPage
+              : 1;
+    pageStack.push({ page: currentPage, extra: collectPageState(), pageNum: pn });
+  }
   mangaReader.loadImages(photoId, albumId, title);
 }
 

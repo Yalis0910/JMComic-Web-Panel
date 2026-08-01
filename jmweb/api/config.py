@@ -3,6 +3,9 @@ from fastapi import APIRouter, HTTPException, Body
 from jmcomic import JmOption
 from pathlib import Path
 
+from jmweb.utils import web_config
+from jmweb.utils.cache import image_cache
+
 router = APIRouter(tags=["config"])
 
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
@@ -91,5 +94,51 @@ async def save_config(
         option = JmOption.construct(config_data, cover_default=False)
         option.to_file(filepath)
         return {"code": 0, "data": None, "message": f"配置已保存到 {filepath}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/config/web")
+async def get_web_config():
+    try:
+        data = web_config.get_web_config()
+        return {
+            "code": 0,
+            "data": {
+                **data,
+                "image_cache_size_mb": image_cache.size_mb(),
+                "image_cache_file_count": image_cache.count(),
+            },
+            "message": "success",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.put("/config/web")
+async def update_web_config(config_data: dict = Body(...)):
+    try:
+        saved = web_config.save_web_config(config_data)
+        return {
+            "code": 0,
+            "data": saved,
+            "message": "图片缓存设置已保存并生效",
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/config/web/clear")
+async def clear_web_config():
+    try:
+        image_cache.clear()
+        return {
+            "code": 0,
+            "data": {
+                "image_cache_size_mb": image_cache.size_mb(),
+                "image_cache_file_count": image_cache.count(),
+            },
+            "message": "图片缓存已清空",
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

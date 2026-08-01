@@ -37,7 +37,16 @@ class GestureManager {
     }
   }
 
-  handleTouchEnd() { this.isZooming = false; }
+  handleTouchEnd(e) {
+    if (this.isZooming) { this.isZooming = false; return; }
+    const now = Date.now();
+    if (now - this.lastTap < 300) {
+      this.lastTap = 0;
+      this.reader.zoom.toggle();
+    } else {
+      this.lastTap = now;
+    }
+  }
 
   handleClick(e) {
     const container = DOM.$('#reader-container');

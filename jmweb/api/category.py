@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
-from jmcomic import JmOption, JmcomicText
+from jmcomic import JmcomicText
+
+from jmweb.api.deps import get_client
 
 router = APIRouter(tags=["category"])
-
-
-def _get_client():
-    return JmOption.default().new_jm_client()
 
 
 def _format_page(page):
@@ -32,7 +30,7 @@ async def get_ranking(
     category: str = Query("ALL", description="分类"),
 ):
     try:
-        client = _get_client()
+        client = get_client()
 
         if ranking_type == "day":
             result = client.day_ranking(page=page, category=category)
@@ -56,7 +54,7 @@ async def get_category(
     category: str = Query("ALL"),
 ):
     try:
-        client = _get_client()
+        client = get_client()
         result = client.categories_filter(
             page=page, time=time, category=category, order_by=order_by
         )

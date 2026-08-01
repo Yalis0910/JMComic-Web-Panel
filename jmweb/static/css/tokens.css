@@ -1,0 +1,83 @@
+:root {
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif;
+  --font-serif: "Noto Serif CJK SC", "Source Han Serif SC", "Songti SC", "SimSun", Georgia, serif;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  color-scheme: light;
+  --bg: #f7f5f1;
+  --bg-elevated: #fdfcfa;
+  --surface: #f0ede7;
+  --surface-hover: #e9e5dd;
+  --border: rgba(58, 53, 46, 0.12);
+  --border-strong: rgba(58, 53, 46, 0.3);
+  --text-1: #2b2926;
+  --text-2: #6f6a63;
+  --text-3: #a29c93;
+
+  --accent: #c56473;
+  --accent-hover: #b45563;
+  --accent-text: #a64a58;
+  --on-accent: #ffffff;
+  --accent-soft: rgba(197, 100, 115, 0.09);
+  --accent-line: rgba(197, 100, 115, 0.35);
+
+  --info: #2792c3;
+  --success: #68be8d;
+  --warning: #a97a3c;
+  --error: #a44551;
+  --error-soft: rgba(164, 69, 81, 0.09);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  --ink: var(--text-1);
+  --ink-light: var(--text-2);
+  --paper: var(--surface);
+  --paper-dim: var(--surface-hover);
+  --cream: var(--bg-elevated);
+  --slate: var(--text-2);
+  --slate-light: var(--text-3);
+  --vermillion: var(--accent);
+  --vermillion-dark: var(--accent-hover);
+  --gold: var(--warning);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1c1c1e;
+  --bg-elevated: #232326;
+  --surface: #26262a;
+  --surface-hover: #2e2e33;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.22);
+  --text-1: #e8e6e2;
+  --text-2: #a8a49c;
+  --text-3: #75716a;
+
+  --accent: #e095a4;
+  --accent-hover: #e9a9b5;
+  --accent-text: #e095a4;
+  --on-accent: #2b2926;
+  --accent-soft: rgba(224, 149, 164, 0.12);
+  --accent-line: rgba(224, 149, 164, 0.4);
+
+  --info: #6ea8cc;
+  --success: #8ecba0;
+  --warning: #c7a06a;
+  --error: #d07a85;
+  --error-soft: rgba(208, 122, 133, 0.12);
+
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

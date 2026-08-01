@@ -50,6 +50,7 @@ class ProgressManager {
   setTotal(total) {
     this.totalImages = total;
     this.currentIndex = 0;
+    this.updateUI();
   }
 
   update(index) {

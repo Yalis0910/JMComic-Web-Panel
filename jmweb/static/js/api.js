@@ -53,6 +53,9 @@ const API = {
     return this.request(`/download/cancel/${taskId}`, { method: 'POST' });
   },
   getDownloadTasks() { return this.request('/download/tasks'); },
+  removeDownloadTask(taskId) {
+    return this.request(`/download/task/${taskId}`, { method: 'DELETE' });
+  },
   clearDownloadHistory() {
     return this.request('/download/clear-history', { method: 'POST' });
   },
@@ -63,6 +66,17 @@ const API = {
       method: 'PUT',
       body: JSON.stringify(data),
     });
+  },
+
+  getWebConfig() { return this.request('/config/web'); },
+  updateWebConfig(data) {
+    return this.request('/config/web', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+  clearImageCache() {
+    return this.request('/config/web/clear', { method: 'POST' });
   },
 
   login(username, password, impl = 'html') {

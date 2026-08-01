@@ -98,6 +98,12 @@ class LazyLoader {
     img.onerror = () => {
       element.classList.add('error');
       element.dataset.loaded = 'error';
+      element.removeAttribute('data-src');
+      const wrapper = element.parentElement;
+      if (wrapper) {
+        const placeholder = wrapper.querySelector('.image-placeholder');
+        if (placeholder) placeholder.style.display = 'none';
+      }
       onComplete();
     };
     img.src = src;

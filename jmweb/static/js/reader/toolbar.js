@@ -12,11 +12,24 @@ class ReaderToolbar {
   }
 
   bindEvents() {
-    DOM.$('#reader-btn-back').addEventListener('click', () => { this.reader.exitReader(); goBack(); });
+    DOM.$('#reader-btn-back').addEventListener('click', () => this.reader.goBack());
     DOM.$('#reader-btn-zoom-out').addEventListener('click', () => this.reader.zoom.out());
     DOM.$('#reader-btn-zoom-in').addEventListener('click', () => this.reader.zoom.in());
+    DOM.$('#reader-btn-fit').addEventListener('click', () => this.reader.toggleFitWidth());
+    DOM.$('#reader-btn-thumbs').addEventListener('click', () => this.reader.toggleThumbStrip());
+    DOM.$('#reader-thumb-close').addEventListener('click', () => this.reader.toggleThumbStrip(false));
     DOM.$('#reader-btn-theme').addEventListener('click', () => this.reader.toggleTheme());
     DOM.$('#reader-btn-fullscreen').addEventListener('click', () => this.reader.toggleFullscreen());
+  }
+
+  setFitActive(active) {
+    const btn = DOM.$('#reader-btn-fit');
+    if (btn) btn.classList.toggle('active', active);
+  }
+
+  setThumbActive(active) {
+    const btn = DOM.$('#reader-btn-thumbs');
+    if (btn) btn.classList.toggle('active', active);
   }
 
   show() {

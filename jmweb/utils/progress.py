@@ -26,6 +26,7 @@ class DownloadTask:
     total_chapters: int = 0
     current_chapter_completed: int = 0
     current_chapter_total: int = 0
+    photo_id: Optional[str] = None
 
 
 class DownloadManager:
@@ -93,6 +94,16 @@ class DownloadManager:
                 event = self._stop_events.get(task_id)
                 if event:
                     event.set()
+        self._save_to_file()
+
+    def remove_task(self, task_id: str):
+        with self._task_lock:
+            task = self._tasks.pop(task_id, None)
+            if task and task.status == "running":
+                event = self._stop_events.get(task_id)
+                if event:
+                    event.set()
+            self._stop_events.pop(task_id, None)
         self._save_to_file()
 
     def get_stop_event(self, task_id: str) -> Optional[threading.Event]:

@@ -1,11 +1,9 @@
 from fastapi import APIRouter, HTTPException, Query
-from jmcomic import JmOption, JmcomicText
+from jmcomic import JmcomicText
+
+from jmweb.api.deps import get_client
 
 router = APIRouter(tags=["search"])
-
-
-def _get_client():
-    return JmOption.default().new_jm_client()
 
 
 def _format_search_result(page):
@@ -34,7 +32,7 @@ async def search_album(
     category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
-        client = _get_client()
+        client = get_client()
         result = client.search_site(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {
             "code": 0,
@@ -54,7 +52,7 @@ async def search_author(
     category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
-        client = _get_client()
+        client = get_client()
         result = client.search_author(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {"code": 0, "data": _format_search_result(result), "message": "success"}
     except Exception as e:
@@ -70,7 +68,7 @@ async def search_tag(
     category: str = Query("0", description="分类: 0/doujin/single/..."),
 ):
     try:
-        client = _get_client()
+        client = get_client()
         result = client.search_tag(search_query=q, page=page, order_by=order_by, time=time, category=category)
         return {"code": 0, "data": _format_search_result(result), "message": "success"}
     except Exception as e:

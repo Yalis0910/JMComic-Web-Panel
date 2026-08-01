@@ -47,19 +47,16 @@ class KeyboardManager {
         if (document.fullscreenElement) {
           document.exitFullscreen();
         } else {
-          this.reader.exitReader();
-          goBack();
+          this.reader.goBack();
         }
         break;
       case 'Backspace':
         e.preventDefault();
-        this.reader.exitReader();
-        goBack();
+        this.reader.goBack();
         break;
       case 'q':
         e.preventDefault();
-        this.reader.exitReader();
-        goBack();
+        this.reader.goBack();
         break;
       case '+':
       case '=':

@@ -215,6 +215,7 @@ async def download_photo_endpoint(
     task = manager.create_task(album_id)
     task.status = "running"
     task.download_type = download_type
+    task.photo_id = photo_id
 
     t = threading.Thread(
         target=_do_download_photo,
@@ -291,6 +292,12 @@ async def get_download_status(task_id: str):
 async def cancel_download(task_id: str):
     manager.cancel_task(task_id)
     return {"code": 0, "data": None, "message": "已取消下载任务"}
+
+
+@router.delete("/download/task/{task_id}")
+async def delete_download_task(task_id: str):
+    manager.remove_task(task_id)
+    return {"code": 0, "data": None, "message": "任务记录已删除"}
 
 
 @router.get("/download/tasks")

@@ -15,7 +15,7 @@ def _is_session_expired(error: Exception) -> bool:
 def _handle_session_expired():
     if session.refresh_session():
         return session.get_client()
-    session.clear_session()
+    session.invalidate_client()
     raise HTTPException(status_code=401, detail="登录已过期，请重新登录")
 
 

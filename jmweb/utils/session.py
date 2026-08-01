@@ -94,6 +94,9 @@ class SessionManager:
         self._delete_session()
 
     def get_client(self):
+        # 内存中无可用客户端但持有保存的凭据时，自动尝试重新登录
+        if self._client is None and self._username and self._password_encrypted:
+            self.refresh_session()
         return self._client
 
     def get_status(self) -> dict:
@@ -129,6 +132,13 @@ class SessionManager:
         except Exception as e:
             print(f"[SessionManager] 自动刷新登录失败: {e}")
             return False
+
+    def invalidate_client(self):
+        """会话过期时仅作废内存中的客户端，保留已保存的凭据，
+        下次请求通过 get_client() 自动重试刷新，避免一次网络抖动丢失登录。"""
+        self._client = None
+        self._option = None
+        self._login_time = 0
 
     def clear_session(self):
         """当请求返回401时调用，清除本地session"""

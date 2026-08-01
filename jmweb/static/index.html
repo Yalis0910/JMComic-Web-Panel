@@ -32,6 +32,7 @@
           <a class="nav-item" data-page="search">搜索</a>
           <a class="nav-item" data-page="downloads">下载</a>
           <a class="nav-item" data-page="favorites">收藏</a>
+          <a class="nav-item" data-page="history">历史</a>
           <a class="nav-item" data-page="settings">设置</a>
         </nav>
         <div class="masthead-actions">
@@ -254,6 +255,27 @@
         <div class="page-nav" id="favoritePagination"></div>
       </section>
 
+      <section id="page-history" class="page">
+        <div class="page-header">
+          <h1 class="page-title">历史</h1>
+          <div class="title-decoration"></div>
+        </div>
+        <div class="section-block">
+          <div class="section-head-row">
+            <h2 class="section-title" style="margin-bottom:0;">阅读历史</h2>
+            <button class="dl-btn dl-btn-plain" id="clearReadHistoryBtn">清空</button>
+          </div>
+          <div class="manga-grid" id="historyGrid" style="margin-top:14px;"></div>
+        </div>
+        <div class="section-block">
+          <div class="section-head-row">
+            <h2 class="section-title" style="margin-bottom:0;">最近搜索</h2>
+            <button class="dl-btn dl-btn-plain" id="clearSearchesBtn">清空</button>
+          </div>
+          <div class="tag-cloud" id="recentSearches" style="margin-top:14px;"></div>
+        </div>
+      </section>
+
       <section id="page-settings" class="page">
         <div class="page-header">
           <h1 class="page-title">设置</h1>
@@ -334,6 +356,10 @@
             <div class="setting-row">
               <label class="setting-label">文件上限</label>
               <input type="number" id="settingCacheMaxFiles" class="setting-input" value="3000" min="1" max="100000">
+            </div>
+            <div class="setting-row">
+              <label class="setting-label">大小上限(MB)</label>
+              <input type="number" id="settingCacheMaxSize" class="setting-input" value="1024" min="1" max="1048576">
             </div>
             <div class="setting-row">
               <label class="setting-label">当前缓存</label>
@@ -430,13 +456,42 @@
     <div class="reader-thumb-strip" id="reader-thumb-strip">
       <div class="reader-thumb-head">
         <span>缩略图</span>
+        <select class="reader-thumb-chapter" id="reader-thumb-chapter" style="display:none;" title="切换章节"></select>
         <button class="thumb-close" id="reader-thumb-close" title="关闭">×</button>
       </div>
       <div class="reader-thumb-list" id="reader-thumb-list"></div>
     </div>
 
     <div class="reader-bottom-bar" id="reader-bottom-bar">
+      <button class="reader-ep-btn" id="reader-btn-prev-ep" title="上一话">上一话</button>
       <span class="page-info" id="reader-page-info">1 / 1</span>
+      <button class="reader-ep-btn" id="reader-btn-next-ep" title="下一话">下一话</button>
+    </div>
+
+    <div class="reader-next-hint hidden" id="reader-next-hint">
+      <span>已到本话最后一页</span>
+      <button id="reader-next-hint-btn">下一话 ›</button>
+    </div>
+
+    <div class="reader-help-overlay hidden" id="reader-help">
+      <div class="reader-help-panel">
+        <div class="reader-help-head">
+          <span>快捷键</span>
+          <button class="thumb-close" id="reader-help-close" title="关闭">×</button>
+        </div>
+        <div class="reader-help-body">
+          <div class="help-row"><span>↑ / ↓</span><span>向上 / 向下滚动</span></div>
+          <div class="help-row"><span>PageUp / PageDown / 空格</span><span>上一页 / 下一页（缩放时按屏滚动）</span></div>
+          <div class="help-row"><span>Home / End</span><span>跳转到第一页 / 最后一页</span></div>
+          <div class="help-row"><span>[ / ]</span><span>上一话 / 下一话</span></div>
+          <div class="help-row"><span>+ / -</span><span>放大 / 缩小</span></div>
+          <div class="help-row"><span>F / F11</span><span>全屏</span></div>
+          <div class="help-row"><span>Esc</span><span>退出全屏 / 返回</span></div>
+          <div class="help-row"><span>Backspace / q</span><span>返回上一页</span></div>
+          <div class="help-row"><span>? / h</span><span>显示 / 隐藏本帮助</span></div>
+          <div class="help-row"><span>点击左右两侧 / 双击 / 双指</span><span>翻页 / 缩放 / 捏合缩放</span></div>
+        </div>
+      </div>
     </div>
   </div>
 

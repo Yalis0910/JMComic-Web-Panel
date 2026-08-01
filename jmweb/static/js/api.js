@@ -1,13 +1,43 @@
 const API = {
   baseURL: '/api/v1',
 
+  _syncing401: false,
+
+  _handleUnauthorized(detail) {
+    if (this._syncing401) return;
+    this._syncing401 = true;
+    fetch(`${this.baseURL}/user/status`)
+      .then(r => r.json())
+      .then(d => {
+        const s = d && d.data;
+        const loggedIn = !!(s && s.is_logged_in);
+        if (typeof state !== 'undefined' && state.isLoggedIn !== loggedIn) {
+          state.isLoggedIn = loggedIn;
+          state.username = (s && s.username) || '';
+          if (typeof updateLoginStatus === 'function') updateLoginStatus();
+        }
+        if (!loggedIn) {
+          if (typeof showToast === 'function') showToast('登录已过期，请重新登录', true);
+          if (typeof showLoginModal === 'function') showLoginModal();
+        }
+      })
+      .catch(() => {})
+      .finally(() => { this._syncing401 = false; });
+  },
+
   async request(url, options = {}) {
     try {
       const resp = await fetch(`${this.baseURL}${url}`, {
         headers: { 'Content-Type': 'application/json' },
         ...options,
       });
-      const data = await resp.json();
+      let data = null;
+      try { data = await resp.json(); } catch (e) { data = null; }
+      if (resp.status === 401) {
+        this._handleUnauthorized(data && data.detail);
+        throw new Error((data && data.detail) || '登录已过期，请重新登录');
+      }
+      if (!data) throw new Error('请求失败');
       if (data.code !== 0) throw new Error(data.message || '请求失败');
       return data.data;
     } catch (err) {

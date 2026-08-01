@@ -10,6 +10,9 @@ class MangaReader {
     this.theme = document.documentElement.getAttribute('data-theme') || 'light';
     this.thumbStripVisible = false;
     this.thumbEnabled = true;
+    this.episodes = null;
+    this.epIndex = -1;
+    this.nextHintTimer = null;
 
     this.lazyLoader = null;
     this.progress = null;
@@ -20,7 +23,27 @@ class MangaReader {
 
     this.initComponents();
     this.bindScrollEvents();
-    this.buildThumbStrip();
+    this.bindEpisodeNav();
+  }
+
+  bindEpisodeNav() {
+    const prevBtn = DOM.$('#reader-btn-prev-ep');
+    const nextBtn = DOM.$('#reader-btn-next-ep');
+    if (prevBtn) prevBtn.addEventListener('click', () => this.prevEpisode());
+    if (nextBtn) nextBtn.addEventListener('click', () => this.nextEpisode());
+    const hintBtn = DOM.$('#reader-next-hint-btn');
+    if (hintBtn) hintBtn.addEventListener('click', () => this.nextEpisode());
+    const helpClose = DOM.$('#reader-help-close');
+    if (helpClose) helpClose.addEventListener('click', () => this.toggleHelp());
+    const help = DOM.$('#reader-help');
+    if (help) help.addEventListener('click', e => { if (e.target === help) this.toggleHelp(); });
+    const chapterSel = DOM.$('#reader-thumb-chapter');
+    if (chapterSel) chapterSel.addEventListener('change', () => {
+      const i = parseInt(chapterSel.value, 10);
+      if (isNaN(i) || !this.episodes || i === this.epIndex) return;
+      const ep = this.episodes[i];
+      this.loadImages(ep.photo_id, this.albumId, (ep.name || '').trim() || this.title, 0, this.episodes);
+    });
   }
 
   initComponents() {
@@ -53,6 +76,11 @@ class MangaReader {
             if (this.albumId && this.images.length) {
               ReadingHistory.updateProgress(this.albumId, currentIndex, this.images.length);
             }
+            if (currentIndex === this.images.length - 1) {
+              this.showNextHint();
+            } else {
+              this.hideNextHint();
+            }
           }
           ticking = false;
         });
@@ -61,7 +89,7 @@ class MangaReader {
     }, { passive: true });
   }
 
-  async loadImages(photoId, albumId, title, jumpTo = 0) {
+  async loadImages(photoId, albumId, title, jumpTo = 0, episodes = null) {
     DOM.showLoading();
     try {
       const data = await API.getPhoto(photoId);
@@ -69,6 +97,10 @@ class MangaReader {
       this.photoId = photoId;
       this.albumId = albumId;
       this.title = title || `Photo ${photoId}`;
+      this.episodes = episodes && episodes.length ? episodes : null;
+      this.epIndex = this.episodes
+        ? this.episodes.findIndex(e => String(e.photo_id) === String(photoId))
+        : -1;
       this.progress.setTotal(this.images.length);
       this.render();
       this.buildThumbStrip();
@@ -77,6 +109,8 @@ class MangaReader {
       const thumbBtn = DOM.$('#reader-btn-thumbs');
       if (thumbBtn) thumbBtn.style.display = this.thumbEnabled ? '' : 'none';
       if (!this.thumbEnabled) this.toggleThumbStrip(false);
+      this.updateEpisodeNav();
+      this.hideNextHint();
       navigateToReader();
       DOM.hideLoading();
       this.toolbar.show();
@@ -135,6 +169,70 @@ class MangaReader {
 
   prevPage() { if (this.currentIndex > 0) this.goTo(this.currentIndex - 1); }
   nextPage() { if (this.currentIndex < this.images.length - 1) this.goTo(this.currentIndex + 1); }
+
+  /* ---------- 章节切换 ---------- */
+
+  hasNextEpisode() {
+    return this.episodes && this.epIndex >= 0 && this.epIndex < this.episodes.length - 1;
+  }
+
+  hasPrevEpisode() {
+    return this.episodes && this.epIndex > 0;
+  }
+
+  nextEpisode() {
+    if (!this.hasNextEpisode()) return;
+    const next = this.episodes[this.epIndex + 1];
+    this.loadImages(next.photo_id, this.albumId, (next.name || '').trim() || this.title, 0, this.episodes);
+  }
+
+  prevEpisode() {
+    if (!this.hasPrevEpisode()) return;
+    const prev = this.episodes[this.epIndex - 1];
+    this.loadImages(prev.photo_id, this.albumId, (prev.name || '').trim() || this.title, 0, this.episodes);
+  }
+
+  updateEpisodeNav() {
+    const prevBtn = DOM.$('#reader-btn-prev-ep');
+    const nextBtn = DOM.$('#reader-btn-next-ep');
+    if (prevBtn) {
+      prevBtn.style.display = this.hasPrevEpisode() ? '' : 'none';
+    }
+    if (nextBtn) {
+      nextBtn.style.display = this.hasNextEpisode() ? '' : 'none';
+    }
+    const chapterSel = DOM.$('#reader-thumb-chapter');
+    if (!chapterSel) return;
+    if (!this.episodes || this.episodes.length <= 1) { chapterSel.style.display = 'none'; return; }
+    chapterSel.innerHTML = this.episodes.map((ep, i) =>
+      `<option value="${i}">第${ep.index}話 ${escapeHtml((ep.name || '').trim())}</option>`
+    ).join('');
+    if (this.epIndex >= 0) chapterSel.value = String(this.epIndex);
+    chapterSel.style.display = '';
+  }
+
+  showNextHint() {
+    if (!this.hasNextEpisode()) return;
+    const hint = DOM.$('#reader-next-hint');
+    if (!hint) return;
+    hint.classList.remove('hidden');
+    clearTimeout(this.nextHintTimer);
+    this.nextHintTimer = setTimeout(() => this.hideNextHint(), 4000);
+  }
+
+  hideNextHint() {
+    clearTimeout(this.nextHintTimer);
+    const hint = DOM.$('#reader-next-hint');
+    if (hint) hint.classList.add('hidden');
+  }
+
+  /* ---------- 快捷键帮助 ---------- */
+
+  toggleHelp() {
+    const help = DOM.$('#reader-help');
+    if (!help) return;
+    help.classList.toggle('hidden');
+  }
 
   nextScreen() {
     const container = DOM.$('#reader-container');
@@ -270,6 +368,9 @@ class MangaReader {
     this.photoId = null;
     this.albumId = null;
     this.title = '';
+    this.episodes = null;
+    this.epIndex = -1;
+    this.hideNextHint();
     this.zoom.reset();
     this.toggleThumbStrip(false);
     DOM.$('#reader-image-list').innerHTML = '';

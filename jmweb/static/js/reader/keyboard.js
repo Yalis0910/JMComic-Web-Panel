@@ -38,18 +38,38 @@ class KeyboardManager {
         e.preventDefault();
         this.reader.goTo(this.reader.images.length - 1);
         break;
+      case '[':
+        e.preventDefault();
+        this.reader.prevEpisode();
+        break;
+      case ']':
+        e.preventDefault();
+        this.reader.nextEpisode();
+        break;
+      case '?':
+      case 'h':
+        e.preventDefault();
+        this.reader.toggleHelp();
+        break;
       case 'f':
       case 'F11':
         e.preventDefault();
         this.reader.toggleFullscreen();
         break;
       case 'Escape':
-        if (document.fullscreenElement) {
-          document.exitFullscreen();
-        } else {
-          this.reader.goBack();
+        {
+          const help = DOM.$('#reader-help');
+          if (help && !DOM.hasClass(help, 'hidden')) {
+            this.reader.toggleHelp();
+            break;
+          }
+          if (document.fullscreenElement) {
+            document.exitFullscreen();
+          } else {
+            this.reader.goBack();
+          }
+          break;
         }
-        break;
       case 'Backspace':
         e.preventDefault();
         this.reader.goBack();

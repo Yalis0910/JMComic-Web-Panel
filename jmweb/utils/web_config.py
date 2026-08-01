@@ -2,13 +2,14 @@ import json
 import logging
 from pathlib import Path
 
-from jmweb.utils.cache import image_cache, _CACHE_DIR, _MAX_FILES
+from jmweb.utils.cache import image_cache, _CACHE_DIR, _MAX_FILES, _MAX_SIZE_MB
 
 WEB_CONFIG_FILE = Path(__file__).parent.parent.parent / "config" / "web-config.json"
 
 DEFAULTS = {
     "image_cache_dir": str(_CACHE_DIR),
     "image_cache_max_files": _MAX_FILES,
+    "image_cache_max_size_mb": _MAX_SIZE_MB,
 }
 
 
@@ -45,6 +46,10 @@ def save_web_config(config_data: dict) -> dict:
         merged["image_cache_max_files"] = max(1, int(merged.get("image_cache_max_files") or _MAX_FILES))
     except (TypeError, ValueError):
         merged["image_cache_max_files"] = _MAX_FILES
+    try:
+        merged["image_cache_max_size_mb"] = max(1, int(merged.get("image_cache_max_size_mb") or _MAX_SIZE_MB))
+    except (TypeError, ValueError):
+        merged["image_cache_max_size_mb"] = _MAX_SIZE_MB
     if not merged.get("image_cache_dir"):
         merged["image_cache_dir"] = DEFAULTS["image_cache_dir"]
 

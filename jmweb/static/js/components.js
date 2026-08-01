@@ -57,6 +57,11 @@ const Components = {
       const cover = _showListCover() && a.cover_url
         ? `<img class="cover-img" data-src="${escapeHtml(a.cover_url)}" alt="${escapeHtml(a.title)}"><span class="cover-skeleton"></span>`
         : `<span class="cover-char">${_coverChar(a.title)}</span>`;
+      const hoverActions = selectable ? '' : `
+        <div class="manga-actions" onclick="event.stopPropagation()">
+          <button class="ma-btn" onclick="event.stopPropagation();quickRead('${a.album_id}')">阅读</button>
+          <button class="ma-btn ma-btn-plain" onclick="event.stopPropagation();quickDownload('${a.album_id}')">下载</button>
+        </div>`;
       return `
       <div class="manga-card${selectable ? ' manga-card-selectable' : ''}"
            ${selectable ? '' : `onclick="showAlbumDetail('${a.album_id}')"`}>
@@ -68,6 +73,7 @@ const Components = {
           </div>` : ''}
         <div class="manga-cover" ${selectable ? `onclick="showAlbumDetail('${a.album_id}')"` : ''}>
           ${cover}
+          ${hoverActions}
         </div>
         <div class="manga-info">
           <div class="manga-title" title="${escapeHtml(a.title)}">${escapeHtml(a.title)}</div>
@@ -87,17 +93,47 @@ const Components = {
       container.innerHTML = '';
       return;
     }
-    container.innerHTML = items.map(h => `
+    container.innerHTML = items.map(h => {
+      const done = h.total && (h.pageIndex + 1) >= h.total;
+      const pct = h.total ? Math.round(((h.pageIndex || 0) + 1) / h.total * 100) : 0;
+      return `
       <div class="manga-card" onclick="continueReading('${h.albumId}')">
         <div class="manga-cover">
           <span class="cover-char">${_coverChar(h.title)}</span>
         </div>
         <div class="manga-info">
           <div class="manga-title" title="${escapeHtml(h.title)}">${escapeHtml(h.title)}</div>
-          <div class="manga-meta">读到 ${(h.pageIndex || 0) + 1} / ${h.total || '?'} 页</div>
+          <div class="manga-meta">${done ? '已读完' : `读到 ${(h.pageIndex || 0) + 1} / ${h.total || '?'} 页`}</div>
+          <div class="hist-progress"><div class="hist-progress-fill" style="width:${pct}%;"></div></div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
+  },
+
+  renderFullHistory(items, containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    if (!items || items.length === 0) {
+      container.innerHTML = '<p class="empty-state">暂无阅读记录</p>';
+      return;
+    }
+    container.innerHTML = items.map(h => {
+      const done = h.total && (h.pageIndex + 1) >= h.total;
+      const pct = h.total ? Math.round(((h.pageIndex || 0) + 1) / h.total * 100) : 0;
+      const time = h.updatedAt ? new Date(h.updatedAt).toLocaleString() : '';
+      return `
+      <div class="manga-card" onclick="continueReading('${h.albumId}')">
+        <div class="manga-cover">
+          <span class="cover-char">${_coverChar(h.title)}</span>
+        </div>
+        <div class="manga-info">
+          <div class="manga-title" title="${escapeHtml(h.title)}">${escapeHtml(h.title)}</div>
+          <div class="manga-meta">${done ? '已读完' : `读到 ${(h.pageIndex || 0) + 1} / ${h.total || '?'} 页`}${time ? ' · ' + time : ''}</div>
+          <div class="hist-progress"><div class="hist-progress-fill" style="width:${pct}%;"></div></div>
+        </div>
+        <button class="hist-remove" title="删除记录" onclick="event.stopPropagation();removeHistoryItem('${h.albumId}')">×</button>
+      </div>`;
+    }).join('');
   },
 
   renderPagination(total, pageCount, currentPage, containerId, pageName) {
@@ -126,7 +162,7 @@ const Components = {
       <div class="episode-row">
         <span class="episode-name">第${ep.index}話 ${escapeHtml(ep.name)}</span>
         <div class="episode-actions">
-          <button class="episode-btn" onclick="openReader('${ep.photo_id}', '${album.album_id}', '${escapeHtml(ep.name.replace(/'/g, "\\'"))}')">阅读</button>
+          <button class="episode-btn" onclick="openEpisode('${ep.photo_id}', '${album.album_id}', '${escapeHtml(ep.name.replace(/'/g, "\\'"))}', ${ep.index})">阅读</button>
           <button class="episode-btn episode-btn-dl" onclick="downloadPhoto('${ep.photo_id}', '${album.album_id}')">下载</button>
         </div>
       </div>`).join('');
@@ -140,12 +176,14 @@ const Components = {
         </div>
         <div class="detail-info">
           <h2>${escapeHtml(album.title)}</h2>
-          <div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">JM${album.album_id}</span></div>
+          <div class="detail-stats">
+            <div class="stat-pill"><span class="stat-num">${album.page_count}</span><span class="stat-label">页数</span></div>
+            <div class="stat-pill"><span class="stat-num">${album.views}</span><span class="stat-label">观看</span></div>
+            <div class="stat-pill"><span class="stat-num">${album.likes}</span><span class="stat-label">点赞</span></div>
+            <div class="stat-pill"><span class="stat-num">${escapeHtml(album.pub_date || '-')}</span><span class="stat-label">发布</span></div>
+          </div>
+          <div class="detail-row"><span class="detail-label">ID</span><span class="detail-value">JM${album.album_id} <button class="copy-id-btn" onclick="copyAlbumId('${album.album_id}')">复制</button></span></div>
           <div class="detail-row"><span class="detail-label">作者</span><span class="detail-value">${authors}</span></div>
-          <div class="detail-row"><span class="detail-label">页数</span><span class="detail-value">${album.page_count}</span></div>
-          <div class="detail-row"><span class="detail-label">观看</span><span class="detail-value">${album.views}</span></div>
-          <div class="detail-row"><span class="detail-label">点赞</span><span class="detail-value">${album.likes}</span></div>
-          <div class="detail-row"><span class="detail-label">发布</span><span class="detail-value">${album.pub_date}</span></div>
           <div class="detail-row"><span class="detail-label">更新</span><span class="detail-value">${album.update_date}</span></div>
           ${album.description ? `<div class="detail-row"><span class="detail-label">简介</span><span class="detail-value">${escapeHtml(album.description)}</span></div>` : ''}
           ${tags ? `<div class="detail-tags">${tags}</div>` : ''}

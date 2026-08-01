@@ -163,6 +163,9 @@ const Router = {
           loadFavorites(pageNum);
         }
         break;
+      case 'history':
+        loadHistoryPage();
+        break;
       case 'settings':
         loadConfig();
         break;

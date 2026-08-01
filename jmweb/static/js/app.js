@@ -63,10 +63,37 @@ function bindNavigation() {
     });
   });
   document.getElementById('searchBtn').addEventListener('click', doHeaderSearch);
-  document.getElementById('searchInput').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doHeaderSearch();
+  document.getElementById('searchInput').addEventListener('input', () => {
+    if (document.activeElement === document.getElementById('searchInput')) renderSearchSuggest();
   });
   document.getElementById('searchInput').addEventListener('focus', renderSearchSuggest);
+  document.getElementById('searchInput').addEventListener('keydown', e => {
+    const box = document.getElementById('searchSuggest');
+    const items = box.querySelectorAll('.suggest-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!items.length) return;
+      e.preventDefault();
+      const dir = e.key === 'ArrowDown' ? 1 : -1;
+      suggestActive = (suggestActive + dir + items.length) % items.length;
+      box.classList.add('visible');
+      items.forEach((it, i) => it.classList.toggle('active', i === suggestActive));
+      items[suggestActive].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      if (suggestActive >= 0 && items[suggestActive]) {
+        e.preventDefault();
+        document.getElementById('searchInput').value = items[suggestActive].dataset.q;
+        suggestActive = -1;
+        doHeaderSearch();
+      } else {
+        doHeaderSearch();
+      }
+    } else if (e.key === 'Escape') {
+      hideSearchSuggest();
+      suggestActive = -1;
+    } else {
+      suggestActive = -1;
+    }
+  });
 }
 
 function doHeaderSearch() {
@@ -243,17 +270,40 @@ function refreshAlbumDetail() {
 
 /* ===================== 阅读器 ===================== */
 
-function openReader(photoId, albumId, title, startIndex = 0) {
+function openReader(photoId, albumId, title, startIndex = 0, episodes = null) {
   if (!mangaReader) {
     mangaReader = new MangaReader();
   }
-  mangaReader.loadImages(photoId, albumId, title, startIndex);
+  mangaReader.loadImages(photoId, albumId, title, startIndex, episodes);
+}
+
+function openEpisode(photoId, albumId, title, index = 0) {
+  let episodes = null;
+  const cached = Router.getCache(`album?id=${albumId}`);
+  if (cached && cached.episodes) {
+    episodes = cached.episodes;
+  } else {
+    API.getAlbum(albumId).then(data => {
+      Router.setCache(`album?id=${albumId}`, data);
+      openReader(photoId, albumId, title, 0, data.episodes || null);
+    }).catch(() => openReader(photoId, albumId, title, 0, null));
+    return;
+  }
+  openReader(photoId, albumId, title, index, episodes);
 }
 
 function continueReading(albumId) {
   const item = ReadingHistory.get().find(i => i.albumId === albumId);
   if (!item) return;
-  openReader(item.photoId, item.albumId, item.title, item.pageIndex || 0);
+  const cached = Router.getCache(`album?id=${albumId}`);
+  if (cached && cached.episodes) {
+    openReader(item.photoId, item.albumId, item.title, item.pageIndex || 0, cached.episodes);
+    return;
+  }
+  API.getAlbum(albumId).then(data => {
+    Router.setCache(`album?id=${albumId}`, data);
+    openReader(item.photoId, item.albumId, item.title, item.pageIndex || 0, data.episodes || null);
+  }).catch(() => openReader(item.photoId, item.albumId, item.title, item.pageIndex || 0, null));
 }
 
 /* ===================== 下载 ===================== */
@@ -647,10 +697,13 @@ function updateThemeIcon(isDark) {
 }
 
 function applyTheme(theme) {
+  const root = document.documentElement;
+  root.classList.add('theme-anim');
   const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  root.setAttribute('data-theme', dark ? 'dark' : 'light');
   updateThemeIcon(dark);
   if (mangaReader) mangaReader.theme = dark ? 'dark' : 'light';
+  setTimeout(() => root.classList.remove('theme-anim'), 400);
 }
 
 document.getElementById('themeToggle')?.addEventListener('click', () => {
@@ -674,16 +727,24 @@ if (window.matchMedia) {
 
 /* ===================== 搜索建议 ===================== */
 
+let suggestActive = -1;
+
 function renderSearchSuggest() {
   const box = document.getElementById('searchSuggest');
-  const items = RecentSearches.get();
-  if (!items.length) return;
+  const input = document.getElementById('searchInput');
+  const q = (input.value || '').trim().toLowerCase();
+  const items = RecentSearches.get().filter(s => !q || s.toLowerCase().includes(q));
+  if (!items.length) {
+    hideSearchSuggest();
+    return;
+  }
+  suggestActive = -1;
   box.innerHTML = `
     <div class="suggest-head"><span>最近搜索</span><span data-clear="1">清空</span></div>
-    ${items.map(q => `
-      <div class="suggest-item" data-q="${escapeHtml(q)}">
-        <span>${escapeHtml(q)}</span>
-        <span class="suggest-del" data-del="${escapeHtml(q)}">×</span>
+    ${items.map(s => `
+      <div class="suggest-item" data-q="${escapeHtml(s)}">
+        <span>${escapeHtml(s)}</span>
+        <span class="suggest-del" data-del="${escapeHtml(s)}">×</span>
       </div>`).join('')}
   `;
   box.classList.add('visible');
@@ -695,6 +756,7 @@ function renderSearchSuggest() {
         renderSearchSuggest();
         return;
       }
+      suggestActive = -1;
       document.getElementById('searchInput').value = item.dataset.q;
       doHeaderSearch();
     });
@@ -781,6 +843,97 @@ function loadDashboard() {
   Router.afterRender();
 }
 
+/* ===================== 历史页 ===================== */
+
+function loadHistoryPage() {
+  Components.renderFullHistory(ReadingHistory.get(), 'historyGrid');
+  const searches = RecentSearches.get();
+  const seBox = document.getElementById('recentSearches');
+  if (searches.length === 0) {
+    seBox.innerHTML = '<p class="empty-state" style="font-size:12px;">暂无搜索记录</p>';
+  } else {
+    seBox.innerHTML = searches.map(q => `
+      <span class="tag-item search-chip" onclick="useRecentSearch('${escapeHtml(q)}')">
+        ${escapeHtml(q)}<span class="chip-del" onclick="event.stopPropagation();removeRecentSearch('${escapeHtml(q)}')">×</span>
+      </span>`).join('');
+  }
+  Router.afterRender();
+}
+
+function removeHistoryItem(albumId) {
+  ReadingHistory.remove(albumId);
+  loadHistoryPage();
+}
+
+function removeRecentSearch(q) {
+  RecentSearches.remove(q);
+  loadHistoryPage();
+}
+
+function useRecentSearch(q) {
+  document.getElementById('searchInput').value = q;
+  doHeaderSearch();
+}
+
+document.getElementById('clearReadHistoryBtn')?.addEventListener('click', () => {
+  const count = ReadingHistory.get().length;
+  if (!count) { showToast('暂无阅读记录'); return; }
+  showConfirm({ title: '清空阅读历史', message: `确定清空全部 ${count} 条阅读记录？此操作不可恢复。`, confirmText: '清空', danger: true }, () => {
+    ReadingHistory.clear();
+    loadHistoryPage();
+    showToast('阅读历史已清空');
+  });
+});
+
+document.getElementById('clearSearchesBtn')?.addEventListener('click', () => {
+  const count = RecentSearches.get().length;
+  if (!count) { showToast('暂无搜索记录'); return; }
+  showConfirm({ title: '清空搜索记录', message: `确定清空全部 ${count} 条搜索记录？此操作不可恢复。`, confirmText: '清空', danger: true }, () => {
+    RecentSearches.clear();
+    loadHistoryPage();
+    showToast('搜索记录已清空');
+  });
+});
+
+/* ===================== 卡片快捷操作 ===================== */
+
+function quickRead(albumId) {
+  API.getAlbum(albumId).then(data => {
+    Router.setCache(`album?id=${albumId}`, data);
+    const eps = data.episodes || [];
+    if (eps.length) {
+      openReader(eps[0].photo_id, albumId, data.title, 0, eps);
+    } else {
+      showAlbumDetail(albumId);
+    }
+  }).catch(err => showToast('加载失败：' + err.message, true));
+}
+
+function quickDownload(albumId) {
+  API.startDownload(albumId, null, 'folder').then(data => {
+    showToast(`任务已创建 #${data.task_id}`);
+    loadDownloadTasks();
+  }).catch(err => showToast(`创建失败：${err.message}`, true));
+}
+
+function copyAlbumId(albumId) {
+  const text = 'JM' + albumId;
+  const done = () => showToast('ID 已复制：' + text);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      done();
+    });
+  } else {
+    showToast('复制失败', true);
+  }
+}
+
 /* ===================== 设置 ===================== */
 
 function syncFormToConfig() {
@@ -834,6 +987,7 @@ function loadCacheSettings() {
   API.getWebConfig().then(data => {
     document.getElementById('settingCacheDir').value = data.image_cache_dir || '';
     document.getElementById('settingCacheMaxFiles').value = data.image_cache_max_files || 3000;
+    document.getElementById('settingCacheMaxSize').value = data.image_cache_max_size_mb || 1024;
     document.getElementById('cacheStats').textContent =
       `${data.image_cache_file_count} 个文件 / ${data.image_cache_size_mb} MB`;
   }).catch(() => {
@@ -844,11 +998,12 @@ function loadCacheSettings() {
 document.getElementById('saveCacheBtn')?.addEventListener('click', () => {
   const dir = document.getElementById('settingCacheDir').value.trim();
   const maxFiles = parseInt(document.getElementById('settingCacheMaxFiles').value) || 3000;
+  const maxSizeMb = parseInt(document.getElementById('settingCacheMaxSize').value) || 1024;
   if (!dir) {
     showToast('缓存目录不能为空', true);
     return;
   }
-  API.updateWebConfig({ image_cache_dir: dir, image_cache_max_files: maxFiles })
+  API.updateWebConfig({ image_cache_dir: dir, image_cache_max_files: maxFiles, image_cache_max_size_mb: maxSizeMb })
     .then(() => {
       showToast('缓存设置已保存');
       loadCacheSettings();

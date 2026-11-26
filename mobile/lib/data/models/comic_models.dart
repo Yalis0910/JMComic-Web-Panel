@@ -112,6 +112,29 @@ class CommentItemModel {
   });
 }
 
+/// Safely converts dynamic JSON values (int, double, or numeric String) to [int].
+int parseJsonInt(dynamic value, [int fallback = 0]) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return fallback;
+    return int.tryParse(trimmed) ?? double.tryParse(trimmed)?.toInt() ?? fallback;
+  }
+  return fallback;
+}
+
+/// Safely converts dynamic JSON values (int, double, or numeric String) to [double].
+double parseJsonDouble(dynamic value, [double fallback = 0]) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return fallback;
+    return double.tryParse(trimmed) ?? fallback;
+  }
+  return fallback;
+}
+
 class UserAccountStatus {
   final bool isLoggedIn;
   final String uid;
@@ -157,14 +180,12 @@ class UserAccountStatus {
         uid: '${json['uid'] ?? ''}',
         username: '${json['username'] ?? ''}',
         levelName: '${json['level_name'] ?? ''}',
-        level: (json['level'] as num?)?.toInt() ?? 1,
-        coin: (json['coin'] as num?)?.toInt() ?? 0,
+        level: parseJsonInt(json['level'], 1),
+        coin: parseJsonInt(json['coin']),
         exp: '${json['exp'] ?? '0'}',
-        expPercent: (json['exp_percent'] as num?)?.toDouble() ??
-            (json['expPercent'] as num?)?.toDouble() ??
-            0,
-        favoritesCount: (json['album_favorites'] as num?)?.toInt() ?? 0,
-        favoritesMax: (json['album_favorites_max'] as num?)?.toInt() ?? 0,
+        expPercent: parseJsonDouble(json['exp_percent'] ?? json['expPercent']),
+        favoritesCount: parseJsonInt(json['album_favorites']),
+        favoritesMax: parseJsonInt(json['album_favorites_max']),
       );
 }
 
@@ -237,8 +258,8 @@ class HistoryRecord {
         title: '${json['title'] ?? ''}',
         chapterTitle: '${json['chapter_title'] ?? ''}',
         coverUrl: '${json['cover_url'] ?? ''}',
-        pageIndex: (json['page_index'] as num?)?.toInt() ?? 0,
-        totalPages: (json['total_pages'] as num?)?.toInt() ?? 0,
-        updatedAt: (json['updated_at'] as num?)?.toInt() ?? 0,
+        pageIndex: parseJsonInt(json['page_index']),
+        totalPages: parseJsonInt(json['total_pages']),
+        updatedAt: parseJsonInt(json['updated_at']),
       );
 }

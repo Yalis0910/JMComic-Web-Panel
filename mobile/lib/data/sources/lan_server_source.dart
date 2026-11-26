@@ -95,13 +95,13 @@ class LanServerSource implements ComicDataSource {
       description: cleanCommentHtml('${d['description'] ?? ''}'),
       views: '${d['views'] ?? '0'}',
       likes: '${d['likes'] ?? '0'}',
-      commentCount: (d['comment_count'] as num?)?.toInt() ?? 0,
+      commentCount: parseJsonInt(d['comment_count']),
       coverUrl: _absUrl('${d['cover_url']}'),
       episodes: ((d['episodes'] as List?) ?? const [])
           .map(
             (e) => ComicEpisode(
               photoId: '${e['photo_id']}',
-              index: (e['index'] as num?)?.toInt() ?? 1,
+              index: parseJsonInt(e['index'], 1),
               name: '${e['name'] ?? ''}',
             ),
           )
@@ -120,7 +120,7 @@ class LanServerSource implements ComicDataSource {
     return imgs
         .map(
           (i) => ChapterImageItem(
-            index: (i['index'] as num?)?.toInt() ?? 1,
+            index: parseJsonInt(i['index'], 1),
             url: _absUrl('${i['proxy_url']}'),
             scrambleId: 0,
           ),
@@ -188,12 +188,12 @@ class LanServerSource implements ComicDataSource {
       uid: '${profile['uid'] ?? ''}',
       username: '${d['username'] ?? profile['username'] ?? ''}',
       levelName: '${profile['level_name'] ?? ''}',
-      level: (profile['level'] as num?)?.toInt() ?? 1,
-      coin: (profile['coin'] as num?)?.toInt() ?? 0,
+      level: parseJsonInt(profile['level'], 1),
+      coin: parseJsonInt(profile['coin']),
       exp: '${profile['exp'] ?? '0'}',
-      expPercent: (profile['exp_percent'] as num?)?.toDouble() ?? 0,
-      favoritesCount: (profile['album_favorites'] as num?)?.toInt() ?? 0,
-      favoritesMax: (profile['album_favorites_max'] as num?)?.toInt() ?? 0,
+      expPercent: parseJsonDouble(profile['exp_percent'] ?? profile['expPercent']),
+      favoritesCount: parseJsonInt(profile['album_favorites']),
+      favoritesMax: parseJsonInt(profile['album_favorites_max']),
     );
   }
 
@@ -240,8 +240,8 @@ class LanServerSource implements ComicDataSource {
     return FavoritePageResult(
       albums: albums,
       folders: folders,
-      total: (d['total'] as num?)?.toInt() ?? albums.length,
-      pageCount: max(1, (d['page_count'] as num?)?.toInt() ?? 1),
+      total: parseJsonInt(d['total'], albums.length),
+      pageCount: max(1, parseJsonInt(d['page_count'], 1)),
     );
   }
 

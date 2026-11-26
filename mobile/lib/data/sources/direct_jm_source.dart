@@ -458,12 +458,12 @@ class DirectJmSource implements ComicDataSource {
       uid: '${data['uid'] ?? ''}',
       username: '${data['username'] ?? username}',
       levelName: '${data['level_name'] ?? ''}',
-      level: (data['level'] as num?)?.toInt() ?? 1,
-      coin: (data['coin'] as num?)?.toInt() ?? 0,
+      level: parseJsonInt(data['level'], 1),
+      coin: parseJsonInt(data['coin']),
       exp: '${data['exp'] ?? '0'}',
-      expPercent: (data['expPercent'] as num?)?.toDouble() ?? 0,
-      favoritesCount: (data['album_favorites'] as num?)?.toInt() ?? 0,
-      favoritesMax: (data['album_favorites_max'] as num?)?.toInt() ?? 0,
+      expPercent: parseJsonDouble(data['expPercent'] ?? data['exp_percent']),
+      favoritesCount: parseJsonInt(data['album_favorites']),
+      favoritesMax: parseJsonInt(data['album_favorites_max']),
     );
     _account = status;
     await _persistSession(status, password: password);

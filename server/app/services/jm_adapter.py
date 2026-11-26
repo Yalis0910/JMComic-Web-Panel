@@ -17,6 +17,28 @@ from app.core.security import decrypt_secret, encrypt_secret
 logger = logging.getLogger("jm_panel.adapter")
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None or isinstance(value, bool):
+            return default
+        if isinstance(value, (int, float)):
+            return int(value)
+        text = str(value).strip()
+        return int(float(text)) if text else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value is None or isinstance(value, bool):
+            return default
+        text = str(value).strip()
+        return float(text) if text else default
+    except (TypeError, ValueError):
+        return default
+
+
 class _PlainTextHTMLParser(HTMLParser):
     """将禁漫接口返回的 HTML 片段安全清洗为纯文本。"""
 
@@ -201,13 +223,13 @@ class JMProtocolAdapter:
                     "username": data.get("username", username),
                     "email": data.get("email", ""),
                     "photo": data.get("photo", ""),
-                    "coin": data.get("coin", 0),
-                    "level": data.get("level", 1),
-                    "level_name": data.get("level_name", ""),
-                    "exp": data.get("exp", "0"),
-                    "exp_percent": data.get("expPercent", 0),
-                    "album_favorites": data.get("album_favorites", 0),
-                    "album_favorites_max": data.get("album_favorites_max", 0),
+                    "coin": _safe_int(data.get("coin"), 0),
+                    "level": _safe_int(data.get("level"), 1),
+                    "level_name": str(data.get("level_name", "") or ""),
+                    "exp": str(data.get("exp", "0") or "0"),
+                    "exp_percent": _safe_float(data.get("expPercent", data.get("exp_percent")), 0.0),
+                    "album_favorites": _safe_int(data.get("album_favorites"), 0),
+                    "album_favorites_max": _safe_int(data.get("album_favorites_max"), 0),
                 }
 
             self._user_client = client

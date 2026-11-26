@@ -73,6 +73,17 @@ async def remove_favorite(album_id: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.post("/checkin")
+async def daily_checkin():
+    try:
+        data = await run_blocking(jm_adapter.daily_checkin)
+        return ok(data, data.get("msg") or "签到完成")
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.get("/favorites/export")
 async def export_favorites():
     try:

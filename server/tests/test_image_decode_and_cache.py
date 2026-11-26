@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from app.services.image_proxy import ImageDiskCache, decode_scrambled_image
+from app.services.image_proxy import ImageDiskCache, decode_scrambled_image, detect_image_mime, fetch_cover_sync
 
 
 def _scramble_for_test(img: Image.Image, num: int) -> bytes:
@@ -59,3 +59,39 @@ def test_image_disk_cache_lru_eviction(tmp_path: Path):
     assert cache.get("k1") == b"a" * 100
     assert cache.get("k2") is None
     assert cache.get("k3") == b"c" * 100
+
+
+def test_fetch_cover_sync_without_resp_headers_and_detect_mime(tmp_path: Path, monkeypatch):
+    from app.services import image_proxy
+    from app.services.jm_adapter import jm_adapter
+
+    test_cache = ImageDiskCache(cache_dir=tmp_path / "cache", max_files=10, max_size_mb=10)
+    monkeypatch.setattr(image_proxy, "image_cache", test_cache)
+
+    buf = BytesIO()
+    Image.new("RGB", (24, 32), color=(180, 40, 80)).save(buf, format="JPEG")
+    jpeg_bytes = buf.getvalue()
+
+    class FakeJmImageResp:
+        def __init__(self, data: bytes):
+            self.content = data
+            self.http_code = 200
+
+        def require_success(self):
+            return None
+
+    class FakeClient:
+        def get_jm_image(self, _url: str):
+            return FakeJmImageResp(jpeg_bytes)
+
+    monkeypatch.setattr(jm_adapter, "get_client", lambda *args, **kwargs: FakeClient())
+
+    data, mime = fetch_cover_sync("422866", size="_3x4")
+    assert data == jpeg_bytes
+    assert mime == "image/jpeg"
+
+    # 命中缓存后仍返回正确 MIME
+    cached_data, cached_mime = fetch_cover_sync("422866", size="_3x4")
+    assert cached_data == jpeg_bytes
+    assert cached_mime == "image/jpeg"
+    assert detect_image_mime(b"\x89PNG\r\n\x1a\nxxxx") == "image/png"

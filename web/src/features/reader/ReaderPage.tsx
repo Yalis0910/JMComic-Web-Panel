@@ -10,7 +10,7 @@ import {
   RotateCw,
   SlidersHorizontal,
 } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, withPanelToken } from '../../api/client';
 import { useAppStore, type ReaderMode } from '../../stores/useAppStore';
 import { BottomSheet, InsetGroup, InsetRow, IosSwitch, SegmentedControl } from '../../components/ios/IosControls';
 
@@ -138,7 +138,7 @@ export function ReaderPage() {
 
   const pages: PageItem[] = useMemo(() => {
     if (source === 'local') {
-      return (localChapterQuery.data?.pages || []).map((p) => ({ index: p.index - 1, url: p.url }));
+      return (localChapterQuery.data?.pages || []).map((p) => ({ index: p.index - 1, url: withPanelToken(p.url) }));
     }
     return (onlinePhotoQuery.data?.images || []).map((img, i) => ({ index: i, url: img.proxy_url }));
   }, [source, localChapterQuery.data, onlinePhotoQuery.data]);

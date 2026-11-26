@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from jmcomic import JmcomicClient, JmcomicText
+from jmcomic.jm_option import JmModuleConfig
 from jmcomic.jm_toolkit import JmImageTool
 from PIL import Image
 
@@ -142,6 +143,21 @@ def decode_scrambled_image(content: bytes, num: int) -> bytes:
     return buf.getvalue()
 
 
+def detect_image_mime(data: bytes, fallback: str = "image/jpeg") -> str:
+    """根据图片魔数推断真实 MIME 类型，避免依赖底层响应对象的 headers 属性。"""
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    if data.startswith(b"GIF8"):
+        return "image/gif"
+    if len(data) >= 12 and data[4:12] in (b"ftypavif", b"ftypavis"):
+        return "image/avif"
+    return fallback
+
+
 def parse_photo_id_from_url(url: str) -> Optional[str]:
     m = _PHOTO_URL_RE.search(url)
     return m.group(1) if m else None
@@ -164,14 +180,14 @@ def fetch_and_decode_image_sync(url: str, scramble_id: Optional[str] = None) -> 
     cache_key = f"page|{url}|{sid}"
     cached = image_cache.get(cache_key)
     if cached is not None:
-        return cached, "image/webp"
+        return cached, detect_image_mime(cached, fallback="image/webp")
 
     resp = client.get_jm_image(url)
     resp.require_success()
 
     num = JmImageTool.get_num_by_url(sid, url)
     if num == 0 or JmcomicClient.img_is_not_need_to_decode(url, resp):
-        content_type = resp.headers.get("content-type", "image/webp")
+        content_type = detect_image_mime(resp.content, fallback="image/webp")
         image_cache.put(cache_key, resp.content)
         return resp.content, content_type
 
@@ -181,17 +197,32 @@ def fetch_and_decode_image_sync(url: str, scramble_id: Optional[str] = None) -> 
 
 
 def fetch_cover_sync(album_id: str, size: str = "") -> Tuple[bytes, str]:
-    """同步拉取漫画封面并走磁盘缓存（解决浏览器直连 CDN 被屏蔽问题）。"""
+    """同步拉取漫画封面并走磁盘缓存（多 CDN 域名回退，避免直连 CDN 被屏蔽或单节点超时）。"""
     cache_key = f"cover|{album_id}|{size}"
     cached = image_cache.get(cache_key)
     if cached is not None:
-        return cached, "image/webp"
+        return cached, detect_image_mime(cached, fallback="image/jpeg")
 
-    cover_url = JmcomicText.get_album_cover_url(album_id, size=size)
     client = jm_adapter.get_client()
-    resp = client.get_jm_image(cover_url)
-    resp.require_success()
+    domains = list(dict.fromkeys(JmModuleConfig.DOMAIN_IMAGE_LIST or []))
+    candidate_domains = domains[:3] if domains else [None]
+    candidate_sizes = [size] if size in ("", "_3x4") else [size, ""]
+    if size == "_3x4":
+        candidate_sizes.append("")
 
-    content_type = resp.headers.get("content-type", "image/jpeg")
-    image_cache.put(cache_key, resp.content)
-    return resp.content, content_type
+    last_exc: Optional[Exception] = None
+    for sz in candidate_sizes:
+        for dom in candidate_domains:
+            try:
+                cover_url = JmcomicText.get_album_cover_url(album_id, image_domain=dom, size=sz)
+                resp = client.get_jm_image(cover_url)
+                resp.require_success()
+                if not resp.content:
+                    raise ValueError("封面响应数据为空")
+                content_type = detect_image_mime(resp.content, fallback="image/jpeg")
+                image_cache.put(cache_key, resp.content)
+                return resp.content, content_type
+            except Exception as exc:
+                last_exc = exc
+
+    raise last_exc or RuntimeError(f"封面拉取失败: album_id={album_id}")

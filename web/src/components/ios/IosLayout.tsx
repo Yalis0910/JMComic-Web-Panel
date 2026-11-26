@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -16,13 +16,13 @@ import { api, getPanelToken } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 
 const NAV_ITEMS = [
-  { to: '/', label: '探索', icon: Compass, end: true },
-  { to: '/explore', label: '分类', icon: LayoutGrid },
-  { to: '/search', label: '搜索', icon: Search },
-  { to: '/library', label: '书库', icon: HardDrive },
-  { to: '/downloads', label: '下载', icon: Download },
-  { to: '/favorites', label: '我的', icon: FolderHeart },
-  { to: '/settings', label: '设置', icon: Settings },
+  { to: '/', label: '探索精选', icon: Compass, end: true },
+  { to: '/explore', label: '排行与分类', icon: LayoutGrid },
+  { to: '/search', label: '全站搜索', icon: Search },
+  { to: '/library', label: '本地书库', icon: HardDrive },
+  { to: '/downloads', label: '下载队列', icon: Download },
+  { to: '/favorites', label: '收藏与记录', icon: FolderHeart },
+  { to: '/settings', label: '系统设置', icon: Settings },
 ];
 
 const MOBILE_TABS = [
@@ -32,6 +32,29 @@ const MOBILE_TABS = [
   { to: '/downloads', label: '下载', icon: Download },
   { to: '/favorites', label: '我的', icon: FolderHeart },
 ];
+
+function BrandLogo({ size = 34 }: { size?: number }) {
+  const [err, setErr] = useState(false);
+  if (err) {
+    return (
+      <div
+        className="rounded-[10px] flex items-center justify-center text-white font-bold shadow-sm shrink-0"
+        style={{ width: size, height: size, background: 'var(--brand-gradient)' }}
+      >
+        JL
+      </div>
+    );
+  }
+  return (
+    <img
+      src="/icon.png"
+      alt="JMlis"
+      onError={() => setErr(true)}
+      className="rounded-[10px] object-cover shadow-sm shrink-0"
+      style={{ width: size, height: size }}
+    />
+  );
+}
 
 export function IosLayout() {
   const { theme, setTheme, toast } = useAppStore();
@@ -51,6 +74,17 @@ export function IosLayout() {
   });
 
   const runningCount = downloads.filter((d) => d.status === 'running').length;
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        navigate('/search');
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [navigate]);
 
   useEffect(() => {
     const token = getPanelToken();
@@ -97,26 +131,64 @@ export function IosLayout() {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
-      {/* iPadOS / macOS 磨砂侧边栏 */}
+      {/* 桌面端现代磨砂侧边栏 */}
       <aside
-        className="hidden md:flex md:w-60 md:shrink-0 md:flex-col md:sticky md:top-0 md:h-screen ios-vibrancy z-30"
-        style={{ borderRight: '0.5px solid var(--ios-separator)' }}
+        className="hidden md:flex md:w-[252px] md:shrink-0 md:flex-col md:sticky md:top-0 md:h-screen ios-vibrancy z-30"
+        style={{ borderRight: '1px solid var(--ios-separator)' }}
       >
-        <div className="px-5 pt-6 pb-4 flex items-center justify-between">
-          <div>
-            <div className="text-[20px] font-bold tracking-tight">JMComic</div>
-            <div className="text-[11px]" style={{ color: 'var(--ios-label-secondary)' }}>
-              本地私有漫画库
+        <div className="px-4 pt-5 pb-3 flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="flex items-center gap-2.5 text-left cursor-pointer group"
+          >
+            <BrandLogo size={36} />
+            <div>
+              <div className="text-[19px] font-bold tracking-tight leading-none flex items-center gap-1.5">
+                JMlis
+              </div>
+              <div className="text-[11px] mt-1 font-medium" style={{ color: 'var(--ios-label-secondary)' }}>
+                私有漫画画廊
+              </div>
             </div>
-          </div>
+          </button>
           <button
             type="button"
             onClick={toggleDark}
             aria-label="切换主题"
-            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-colors"
-            style={{ backgroundColor: 'var(--ios-fill-tertiary)', color: 'var(--ios-label-primary)' }}
+            className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-transform active:scale-95"
+            style={{
+              backgroundColor: 'var(--ios-fill-tertiary)',
+              border: '1px solid var(--ios-separator)',
+              color: 'var(--ios-label-primary)',
+            }}
           >
             {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* 快捷搜索触发条 */}
+        <div className="px-3.5 pb-3">
+          <button
+            type="button"
+            onClick={() => navigate('/search')}
+            className="w-full flex items-center justify-between px-3 py-2 rounded-[12px] text-[13px] cursor-pointer transition-colors hover:opacity-90"
+            style={{
+              backgroundColor: 'var(--ios-fill-tertiary)',
+              border: '1px solid var(--ios-separator)',
+              color: 'var(--ios-label-secondary)',
+            }}
+          >
+            <span className="flex items-center gap-2">
+              <Search className="w-3.5 h-3.5" />
+              <span>搜索作品 / 车号</span>
+            </span>
+            <kbd
+              className="px-1.5 py-0.5 rounded text-[10px] font-mono"
+              style={{ backgroundColor: 'var(--ios-bg-secondary)', border: '1px solid var(--ios-separator)' }}
+            >
+              Ctrl K
+            </kbd>
           </button>
         </div>
 
@@ -128,14 +200,11 @@ export function IosLayout() {
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center justify-between px-3 py-2.5 rounded-[11px] text-[15px] font-medium transition-all duration-150 ${
-                    isActive ? 'text-white shadow-xs' : 'hover:opacity-80'
-                  }`
-                }
+                className="flex items-center justify-between px-3 py-2.5 rounded-[12px] text-[14.5px] font-medium transition-all duration-150"
                 style={({ isActive }) => ({
                   backgroundColor: isActive ? 'var(--ios-blue)' : 'transparent',
                   color: isActive ? '#ffffff' : 'var(--ios-label-primary)',
+                  boxShadow: isActive ? '0 6px 18px -6px rgba(79, 70, 229, 0.65)' : 'none',
                 })}
               >
                 <span className="flex items-center gap-3">
@@ -152,25 +221,33 @@ export function IosLayout() {
           })}
         </nav>
 
-        <div className="p-3 ios-hairline-t">
+        <div className="p-3.5 ios-hairline-t">
           <button
             type="button"
             onClick={() => navigate('/favorites')}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left cursor-pointer"
-            style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+            className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-[14px] text-left cursor-pointer transition-transform active:scale-[0.98]"
+            style={{
+              backgroundColor: 'var(--ios-bg-secondary)',
+              border: '1px solid var(--ios-separator)',
+              boxShadow: 'var(--ios-shadow-sm)',
+            }}
           >
             <div
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[13px] font-semibold text-white shrink-0"
-              style={{ backgroundColor: userStatus?.is_logged_in ? 'var(--ios-blue)' : 'var(--ios-label-tertiary)' }}
+              className="w-9 h-9 rounded-full flex items-center justify-center text-[13.5px] font-bold text-white shrink-0"
+              style={{
+                background: userStatus?.is_logged_in ? 'var(--brand-gradient)' : 'var(--ios-label-tertiary)',
+              }}
             >
               {(userStatus?.username || '?').slice(0, 1).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium truncate">
-                {userStatus?.is_logged_in ? userStatus.username : '未登录 JM 账号'}
+              <div className="text-[13.5px] font-semibold truncate">
+                {userStatus?.is_logged_in ? userStatus.username : '登录 JM 账号'}
               </div>
-              <div className="text-[11px]" style={{ color: 'var(--ios-label-secondary)' }}>
-                {userStatus?.is_logged_in ? '点击管理收藏' : '点击登录同步收藏'}
+              <div className="text-[11px] truncate" style={{ color: 'var(--ios-label-secondary)' }}>
+                {userStatus?.is_logged_in
+                  ? String(userStatus.profile?.level_name || '已连接云端收藏')
+                  : '同步云端收藏与签到'}
               </div>
             </div>
           </button>
@@ -178,43 +255,53 @@ export function IosLayout() {
       </aside>
 
       {/* 主内容区域 */}
-      <div className="flex-1 min-w-0 flex flex-col pb-24 md:pb-10">
-        {/* 移动端顶部工具条 */}
-        <header
-          className="md:hidden sticky top-0 z-20 ios-vibrancy ios-hairline-b px-4 h-12 flex items-center justify-between"
-        >
-          <span className="text-[16px] font-semibold">JMComic</span>
+      <div className="flex-1 min-w-0 flex flex-col pb-24 md:pb-12">
+        {/* 移动端磨砂顶栏 */}
+        <header className="md:hidden sticky top-0 z-20 ios-vibrancy ios-hairline-b px-4 h-14 flex items-center justify-between">
+          <button type="button" onClick={() => navigate('/')} className="flex items-center gap-2 cursor-pointer">
+            <BrandLogo size={28} />
+            <span className="text-[17px] font-bold tracking-tight">JMlis</span>
+          </button>
           <div className="flex items-center gap-2">
             {location.pathname !== '/search' && (
               <button
                 type="button"
                 onClick={() => navigate('/search')}
-                className="w-8 h-8 rounded-full flex items-center justify-center"
-                style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+                aria-label="搜索"
+                className="w-8.5 h-8.5 rounded-full flex items-center justify-center"
+                style={{ backgroundColor: 'var(--ios-fill-tertiary)', border: '1px solid var(--ios-separator)' }}
               >
                 <Search className="w-4 h-4" />
               </button>
             )}
             <button
               type="button"
+              onClick={toggleDark}
+              aria-label="切换主题"
+              className="w-8.5 h-8.5 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'var(--ios-fill-tertiary)', border: '1px solid var(--ios-separator)' }}
+            >
+              {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
               onClick={() => navigate('/settings')}
-              className="w-8 h-8 rounded-full flex items-center justify-center"
-              style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+              aria-label="设置"
+              className="w-8.5 h-8.5 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: 'var(--ios-fill-tertiary)', border: '1px solid var(--ios-separator)' }}
             >
               <Settings className="w-4 h-4" />
             </button>
           </div>
         </header>
 
-        <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 pt-4 sm:pt-7">
+        <main className="w-full max-w-6xl mx-auto px-4 sm:px-7 pt-5 sm:pt-7 animate-fade-in">
           <Outlet />
         </main>
       </div>
 
-      {/* 移动端 iOS 磨砂底部 Tab Bar */}
-      <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-30 ios-vibrancy ios-hairline-t flex items-center justify-around pt-1.5 safe-bottom"
-      >
+      {/* 移动端磨砂底部 Tab Bar */}
+      <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 ios-vibrancy ios-hairline-t flex items-center justify-around pt-1.5 safe-bottom">
         {MOBILE_TABS.map((tab) => {
           const Icon = tab.icon;
           return (
@@ -222,12 +309,12 @@ export function IosLayout() {
               key={tab.to}
               to={tab.to}
               end={tab.end}
-              className="relative flex flex-col items-center justify-center gap-0.5 px-3 py-1 text-[10px] font-medium"
+              className="relative flex flex-col items-center justify-center gap-0.5 px-3 py-1 text-[10.5px] font-medium"
               style={({ isActive }) => ({
                 color: isActive ? 'var(--ios-blue)' : 'var(--ios-label-secondary)',
               })}
             >
-              <Icon className="w-[22px] h-[22px]" strokeWidth={1.9} />
+              <Icon className="w-[21px] h-[21px]" strokeWidth={2} />
               <span>{tab.label}</span>
               {tab.to === '/downloads' && runningCount > 0 && (
                 <span
@@ -242,13 +329,14 @@ export function IosLayout() {
         })}
       </nav>
 
-      {/* iOS 顶部悬浮胶囊 Toast */}
+      {/* 顶部悬浮胶囊 Toast */}
       {toast && (
         <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
           <div
-            className="ios-vibrancy px-4 py-2.5 rounded-full shadow-lg text-[13.5px] font-medium flex items-center gap-2"
+            className="ios-vibrancy px-4 py-2.5 rounded-full text-[13.5px] font-medium flex items-center gap-2 animate-fade-in"
             style={{
-              border: '0.5px solid var(--ios-separator)',
+              border: '1px solid var(--ios-separator)',
+              boxShadow: 'var(--ios-shadow-md)',
               color:
                 toast.tone === 'error'
                   ? 'var(--ios-red)'

@@ -2,45 +2,60 @@
 
 :root {
   color-scheme: light;
-  --ios-bg-grouped: #f2f2f7;
+  --ios-bg-grouped: #f4f5f9;
   --ios-bg-secondary: #ffffff;
-  --ios-bg-tertiary: #f2f2f7;
-  --ios-fill-primary: rgba(120, 120, 128, 0.2);
-  --ios-fill-secondary: rgba(120, 120, 128, 0.14);
-  --ios-fill-tertiary: rgba(118, 118, 128, 0.1);
-  --ios-label-primary: #000000;
-  --ios-label-secondary: rgba(60, 60, 67, 0.65);
-  --ios-label-tertiary: rgba(60, 60, 67, 0.38);
-  --ios-separator: rgba(60, 60, 67, 0.18);
-  --ios-chrome-bg: rgba(249, 249, 249, 0.78);
-  --ios-sheet-bg: rgba(255, 255, 255, 0.88);
-  --ios-blue: #007aff;
-  --ios-pink: #ff2d55;
-  --ios-green: #34c759;
-  --ios-orange: #ff9500;
-  --ios-red: #ff3b30;
+  --ios-bg-tertiary: #eceef4;
+  --ios-fill-primary: rgba(118, 124, 148, 0.22);
+  --ios-fill-secondary: rgba(118, 124, 148, 0.14);
+  --ios-fill-tertiary: rgba(118, 124, 148, 0.09);
+  --ios-label-primary: #11131c;
+  --ios-label-secondary: rgba(24, 28, 45, 0.64);
+  --ios-label-tertiary: rgba(24, 28, 45, 0.40);
+  --ios-separator: rgba(24, 28, 45, 0.10);
+  --ios-chrome-bg: rgba(255, 255, 255, 0.78);
+  --ios-sheet-bg: rgba(255, 255, 255, 0.92);
+  --ios-blue: #4f46e5;
+  --ios-blue-hover: #4338ca;
+  --ios-accent-soft: rgba(79, 70, 229, 0.12);
+  --ios-pink: #f43f5e;
+  --ios-green: #10b981;
+  --ios-orange: #f59e0b;
+  --ios-red: #ef4444;
+  --ios-shadow-sm: 0 2px 10px rgba(17, 19, 28, 0.05), 0 1px 2px rgba(17, 19, 28, 0.04);
+  --ios-shadow-md: 0 12px 32px -8px rgba(17, 19, 28, 0.10), 0 4px 12px -4px rgba(17, 19, 28, 0.05);
+  --ios-shadow-lg: 0 22px 48px -12px rgba(17, 19, 28, 0.16);
   --ios-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --brand-gradient: linear-gradient(135deg, #4f46e5 0%, #3b82f6 55%, #ec4899 100%);
+  --skeleton-base: rgba(118, 124, 148, 0.12);
+  --skeleton-shine: rgba(255, 255, 255, 0.55);
 }
 
 html[data-theme="dark"] {
   color-scheme: dark;
-  --ios-bg-grouped: #000000;
-  --ios-bg-secondary: #1c1c1e;
-  --ios-bg-tertiary: #2c2c2e;
-  --ios-fill-primary: rgba(120, 120, 128, 0.36);
-  --ios-fill-secondary: rgba(120, 120, 128, 0.28);
-  --ios-fill-tertiary: rgba(118, 118, 128, 0.22);
-  --ios-label-primary: #ffffff;
-  --ios-label-secondary: rgba(235, 235, 245, 0.62);
-  --ios-label-tertiary: rgba(235, 235, 245, 0.36);
-  --ios-separator: rgba(84, 84, 88, 0.48);
-  --ios-chrome-bg: rgba(28, 28, 30, 0.76);
-  --ios-sheet-bg: rgba(28, 28, 30, 0.9);
-  --ios-blue: #0a84ff;
-  --ios-pink: #ff375f;
-  --ios-green: #30d158;
-  --ios-orange: #ff9f0a;
-  --ios-red: #ff453a;
+  --ios-bg-grouped: #090b12;
+  --ios-bg-secondary: #131622;
+  --ios-bg-tertiary: #1b2030;
+  --ios-fill-primary: rgba(148, 163, 184, 0.28);
+  --ios-fill-secondary: rgba(148, 163, 184, 0.18);
+  --ios-fill-tertiary: rgba(148, 163, 184, 0.12);
+  --ios-label-primary: #f8fafc;
+  --ios-label-secondary: rgba(226, 232, 240, 0.68);
+  --ios-label-tertiary: rgba(226, 232, 240, 0.42);
+  --ios-separator: rgba(255, 255, 255, 0.09);
+  --ios-chrome-bg: rgba(15, 18, 29, 0.76);
+  --ios-sheet-bg: rgba(19, 22, 34, 0.92);
+  --ios-blue: #6366f1;
+  --ios-blue-hover: #818cf8;
+  --ios-accent-soft: rgba(99, 102, 241, 0.18);
+  --ios-pink: #fb7185;
+  --ios-green: #34d399;
+  --ios-orange: #fbbf24;
+  --ios-red: #f87171;
+  --ios-shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.28);
+  --ios-shadow-md: 0 14px 36px -8px rgba(0, 0, 0, 0.45);
+  --ios-shadow-lg: 0 24px 56px -12px rgba(0, 0, 0, 0.65);
+  --skeleton-base: rgba(148, 163, 184, 0.11);
+  --skeleton-shine: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -53,7 +68,7 @@ body {
   padding: 0;
   background-color: var(--ios-bg-grouped);
   color: var(--ios-label-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Helvetica Neue", sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
@@ -66,23 +81,34 @@ body {
 
 .ios-card {
   background-color: var(--ios-bg-secondary);
-  border-radius: 16px;
-  border: 0.5px solid var(--ios-separator);
+  border-radius: 18px;
+  border: 1px solid var(--ios-separator);
+  box-shadow: var(--ios-shadow-sm);
 }
 
 .ios-grouped-list {
   background-color: var(--ios-bg-secondary);
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 0.5px solid var(--ios-separator);
+  border: 1px solid var(--ios-separator);
+  box-shadow: var(--ios-shadow-sm);
+}
+
+.card-lift {
+  transition: transform 0.28s var(--ios-spring), box-shadow 0.28s var(--ios-spring), border-color 0.2s ease;
+}
+
+.card-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--ios-shadow-md);
 }
 
 .ios-hairline-b {
-  border-bottom: 0.5px solid var(--ios-separator);
+  border-bottom: 1px solid var(--ios-separator);
 }
 
 .ios-hairline-t {
-  border-top: 0.5px solid var(--ios-separator);
+  border-top: 1px solid var(--ios-separator);
 }
 
 .ios-spring {
@@ -105,13 +131,49 @@ body {
   scrollbar-width: none;
 }
 
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--skeleton-base);
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  animation: shimmer 1.45s infinite ease-in-out;
+}
+
+@keyframes shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translateY(24px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s var(--ios-spring) both;
 }

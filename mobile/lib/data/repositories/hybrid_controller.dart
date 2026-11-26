@@ -43,12 +43,14 @@ class HybridState {
   final ActiveMode activeMode;
   final bool probing;
   final List<HistoryRecord> history;
+  final UserAccountStatus account;
 
   const HybridState({
     required this.settings,
     required this.activeMode,
     this.probing = false,
     this.history = const [],
+    this.account = UserAccountStatus.empty,
   });
 
   HybridState copyWith({
@@ -56,12 +58,14 @@ class HybridState {
     ActiveMode? activeMode,
     bool? probing,
     List<HistoryRecord>? history,
+    UserAccountStatus? account,
   }) =>
       HybridState(
         settings: settings ?? this.settings,
         activeMode: activeMode ?? this.activeMode,
         probing: probing ?? this.probing,
         history: history ?? this.history,
+        account: account ?? this.account,
       );
 }
 
@@ -122,11 +126,12 @@ class HybridController extends StateNotifier<HybridState> {
     final pref = state.settings.preference;
     if (pref == ConnectionPreference.directOnly) {
       state = state.copyWith(activeMode: ActiveMode.directJm, probing: false);
+      await refreshAccount();
       return;
     }
     if (pref == ConnectionPreference.lanOnly) {
       state = state.copyWith(activeMode: ActiveMode.lanServer, probing: false);
-      await _syncWithLan();
+      await Future.wait([_syncWithLan(), refreshAccount()]);
       return;
     }
 
@@ -137,12 +142,39 @@ class HybridController extends StateNotifier<HybridState> {
       final res = await dio.get('$cleanBase/api/v2/system/health');
       if (res.statusCode == 200) {
         state = state.copyWith(activeMode: ActiveMode.lanServer, probing: false);
-        await _syncWithLan();
+        await Future.wait([_syncWithLan(), refreshAccount()]);
         return;
       }
     } catch (_) {}
 
     state = state.copyWith(activeMode: ActiveMode.directJm, probing: false);
+    await refreshAccount();
+  }
+
+  Future<void> refreshAccount() async {
+    try {
+      final acc = await activeSource.getUserStatus();
+      state = state.copyWith(account: acc);
+    } catch (_) {
+      state = state.copyWith(account: UserAccountStatus.empty);
+    }
+  }
+
+  Future<UserAccountStatus> login(String username, String password) async {
+    final acc = await activeSource.login(username, password);
+    state = state.copyWith(account: acc);
+    return acc;
+  }
+
+  Future<void> logout() async {
+    await activeSource.logout();
+    state = state.copyWith(account: UserAccountStatus.empty);
+  }
+
+  Future<CheckinResult> dailyCheckin() async {
+    final res = await activeSource.dailyCheckin();
+    await refreshAccount();
+    return res;
   }
 
   Future<void> recordReading(HistoryRecord rec) async {
@@ -175,6 +207,31 @@ class HybridController extends StateNotifier<HybridState> {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/offline/$photoId/$index.jpg');
     return await file.exists() ? file : null;
+  }
+
+  Future<List<({String photoId, int pageCount})>> listOfflineChapters() async {
+    final dir = await getApplicationDocumentsDirectory();
+    final offlineDir = Directory('${dir.path}/offline');
+    if (!await offlineDir.exists()) return const [];
+    final out = <({String photoId, int pageCount})>[];
+    await for (final entity in offlineDir.list()) {
+      if (entity is Directory) {
+        final name = entity.path.split(Platform.pathSeparator).last;
+        final files = await entity.list().where((e) => e is File).length;
+        if (files > 0) {
+          out.add((photoId: name, pageCount: files));
+        }
+      }
+    }
+    return out;
+  }
+
+  Future<void> deleteOfflineChapter(String photoId) async {
+    final dir = await getApplicationDocumentsDirectory();
+    final target = Directory('${dir.path}/offline/$photoId');
+    if (await target.exists()) {
+      await target.delete(recursive: true);
+    }
   }
 
   Future<void> cacheChapterOffline(String photoId, List<ChapterImageItem> items) async {

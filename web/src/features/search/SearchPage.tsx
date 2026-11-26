@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Search, X } from 'lucide-react';
+import { Search, Sparkles, X } from 'lucide-react';
 import { api } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/ios/ComicCard';
-import { SegmentedControl } from '../../components/ios/IosControls';
+import { SegmentedControl, SkeletonCardGrid } from '../../components/ios/IosControls';
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -16,8 +16,8 @@ export function SearchPage() {
   const [input, setInput] = useState(initialQ);
   const [searchType, setSearchType] = useState(initialType);
   const [orderBy, setOrderBy] = useState(params.get('order') || 'mr');
-  const [timeRange, setTimeRange] = useState(params.get('time') || 'a');
-  const { recentSearches, addRecentSearch, removeRecentSearch, clearRecentSearches } = useAppStore();
+  const [timeRange] = useState(params.get('time') || 'a');
+  const { recentSearches, quickTags, addRecentSearch, removeRecentSearch, clearRecentSearches } = useAppStore();
 
   useEffect(() => {
     setInput(params.get('q') || '');
@@ -48,40 +48,49 @@ export function SearchPage() {
   };
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-[34px] font-bold tracking-tight leading-tight">搜索</h1>
+    <div className="space-y-6">
+      <div>
+        <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+          SEARCH · JMLIS
+        </p>
+        <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">全站搜索</h1>
+      </div>
 
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submitSearch(input);
         }}
-        className="flex gap-2"
+        className="flex gap-2.5"
       >
         <div className="relative flex-1">
           <Search
-            className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2"
+            className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2"
             style={{ color: 'var(--ios-label-secondary)' }}
           />
           <input
             type="search"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="关键词、JM车号、+包含 -排除..."
-            className="w-full rounded-[12px] pl-10 pr-4 py-2.5 text-[15px] outline-none"
-            style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+            placeholder="关键词、JM 车号、+包含 -排除..."
+            className="w-full rounded-[14px] pl-11 pr-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[var(--ios-blue)]/30"
+            style={{
+              backgroundColor: 'var(--ios-bg-secondary)',
+              border: '1px solid var(--ios-separator)',
+              boxShadow: 'var(--ios-shadow-sm)',
+            }}
           />
         </div>
         <button
           type="submit"
-          className="px-4 rounded-[12px] text-[15px] font-medium text-white cursor-pointer"
-          style={{ backgroundColor: 'var(--ios-blue)' }}
+          className="px-6 rounded-[14px] text-[14.5px] font-semibold text-white cursor-pointer"
+          style={{ background: 'var(--brand-gradient)' }}
         >
           搜索
         </button>
       </form>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
         <SegmentedControl
           value={searchType}
           onChange={(v) => {
@@ -111,47 +120,70 @@ export function SearchPage() {
         />
       </div>
 
-      {!queryText && recentSearches.length > 0 && (
-        <section className="ios-card p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-[15px] font-semibold">最近搜索</h2>
-            <button
-              type="button"
-              onClick={clearRecentSearches}
-              className="text-[13px] cursor-pointer"
-              style={{ color: 'var(--ios-blue)' }}
-            >
-              清空
-            </button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {recentSearches.map((item) => (
-              <div
-                key={item}
-                className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1 rounded-full text-[13px]"
-                style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
-              >
-                <button type="button" onClick={() => submitSearch(item)} className="cursor-pointer">
-                  {item}
-                </button>
+      {!queryText && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {recentSearches.length > 0 && (
+            <section className="ios-card p-5 space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[15px] font-semibold">最近搜索</h2>
                 <button
                   type="button"
-                  onClick={() => removeRecentSearch(item)}
-                  className="opacity-60 hover:opacity-100 cursor-pointer"
+                  onClick={clearRecentSearches}
+                  className="text-[12.5px] font-medium cursor-pointer"
+                  style={{ color: 'var(--ios-blue)' }}
                 >
-                  <X className="w-3.5 h-3.5" />
+                  清空
                 </button>
               </div>
-            ))}
-          </div>
-        </section>
-      )}
+              <div className="flex flex-wrap gap-2">
+                {recentSearches.map((item) => (
+                  <div
+                    key={item}
+                    className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-[13px]"
+                    style={{ backgroundColor: 'var(--ios-fill-tertiary)', border: '1px solid var(--ios-separator)' }}
+                  >
+                    <button type="button" onClick={() => submitSearch(item)} className="cursor-pointer font-medium">
+                      {item}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removeRecentSearch(item)}
+                      className="opacity-60 hover:opacity-100 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
-      {isLoading && (
-        <div className="ios-card p-10 text-center text-[14px]" style={{ color: 'var(--ios-label-secondary)' }}>
-          正在搜索...
+          <section className="ios-card p-5 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" style={{ color: 'var(--ios-orange)' }} />
+              <h2 className="text-[15px] font-semibold">热门标签与搜索技巧</h2>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickTags.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => submitSearch(tag, 'tag')}
+                  className="px-3 py-1.5 rounded-full text-[12.5px] font-medium cursor-pointer transition-colors"
+                  style={{ backgroundColor: 'var(--ios-accent-soft)', color: 'var(--ios-blue)' }}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+            <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ios-label-secondary)' }}>
+              提示：支持直接输入 JM 数字车号跳转；使用 <code className="px-1 rounded bg-black/5 dark:bg-white/10">+标签 -排除词</code> 可精确组合检索。
+            </p>
+          </section>
         </div>
       )}
+
+      {isLoading && <SkeletonCardGrid count={10} />}
 
       {error && (
         <div className="ios-card p-8 text-center text-[14px]" style={{ color: 'var(--ios-red)' }}>
@@ -161,10 +193,10 @@ export function SearchPage() {
 
       {data && (
         <>
-          <div className="text-[13px]" style={{ color: 'var(--ios-label-secondary)' }}>
-            共找到 {data.total} 条结果
+          <div className="text-[13px] font-medium" style={{ color: 'var(--ios-label-secondary)' }}>
+            共找到 <span className="tabular-nums font-semibold" style={{ color: 'var(--ios-label-primary)' }}>{data.total}</span> 条结果
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {data.albums.map((a) => (
               <ComicCard key={a.album_id} album={a} />
             ))}
@@ -174,21 +206,33 @@ export function SearchPage() {
               <button
                 type="button"
                 disabled={initialPage <= 1}
-                onClick={() => setParams({ q: queryText, type: searchType, page: String(initialPage - 1), order: orderBy, time: timeRange })}
-                className="px-4 py-2 rounded-xl text-[14px] font-medium disabled:opacity-40 cursor-pointer"
-                style={{ backgroundColor: 'var(--ios-bg-secondary)', border: '0.5px solid var(--ios-separator)' }}
+                onClick={() =>
+                  setParams({ q: queryText, type: searchType, page: String(initialPage - 1), order: orderBy, time: timeRange })
+                }
+                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--ios-bg-secondary)',
+                  border: '1px solid var(--ios-separator)',
+                  boxShadow: 'var(--ios-shadow-sm)',
+                }}
               >
                 上一页
               </button>
-              <span className="text-[13px] tabular-nums" style={{ color: 'var(--ios-label-secondary)' }}>
-                {initialPage} / {data.page_count}
+              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--ios-label-secondary)' }}>
+                第 {initialPage} / {data.page_count} 页
               </span>
               <button
                 type="button"
                 disabled={initialPage >= data.page_count}
-                onClick={() => setParams({ q: queryText, type: searchType, page: String(initialPage + 1), order: orderBy, time: timeRange })}
-                className="px-4 py-2 rounded-xl text-[14px] font-medium disabled:opacity-40 cursor-pointer"
-                style={{ backgroundColor: 'var(--ios-bg-secondary)', border: '0.5px solid var(--ios-separator)' }}
+                onClick={() =>
+                  setParams({ q: queryText, type: searchType, page: String(initialPage + 1), order: orderBy, time: timeRange })
+                }
+                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--ios-bg-secondary)',
+                  border: '1px solid var(--ios-separator)',
+                  boxShadow: 'var(--ios-shadow-sm)',
+                }}
               >
                 下一页
               </button>

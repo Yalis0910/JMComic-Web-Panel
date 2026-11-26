@@ -1,5 +1,5 @@
-name: jmcomic_panel_app
-description: JMComic Hybrid iOS-style App (LAN Server + Direct JM Mode)
+name: jmlis
+description: JMlis — 现代跨平台漫画阅读器 (LAN 服务端 + 外出直连)
 publish_to: "none"
 version: 2.0.0+1
 
@@ -22,6 +22,15 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+  remove_alpha_ios: true
 
 flutter:
   uses-material-design: false
+  assets:
+    - assets/icon/app_icon.png

@@ -1,9 +1,12 @@
 import csv
+import html
 import io
 import json
 import logging
+import re
 import threading
 import time
+from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
 from jmcomic import JmMagicConstants, JmOption, JmcomicText
@@ -12,6 +15,66 @@ from app.core.config import config_manager
 from app.core.security import decrypt_secret, encrypt_secret
 
 logger = logging.getLogger("jm_panel.adapter")
+
+
+class _PlainTextHTMLParser(HTMLParser):
+    """将禁漫接口返回的 HTML 片段安全清洗为纯文本。"""
+
+    _BLOCK_END_TAGS = {"div", "p", "li", "blockquote", "tr", "h1", "h2", "h3", "h4", "h5", "h6"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._chunks: List[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, Optional[str]]]) -> None:
+        t = tag.lower()
+        if t in ("script", "style"):
+            self._skip_depth += 1
+        elif t == "br" and self._skip_depth == 0:
+            self._chunks.append("\n")
+        elif t == "img" and self._skip_depth == 0:
+            alt = dict(attrs).get("alt") or ""
+            if alt.strip():
+                self._chunks.append(alt.strip())
+
+    def handle_endtag(self, tag: str) -> None:
+        t = tag.lower()
+        if t in ("script", "style"):
+            if self._skip_depth > 0:
+                self._skip_depth -= 1
+        elif t in self._BLOCK_END_TAGS and self._skip_depth == 0:
+            if self._chunks and not self._chunks[-1].endswith("\n"):
+                self._chunks.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0 and data:
+            self._chunks.append(data)
+
+    def get_text(self) -> str:
+        raw = "".join(self._chunks).replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+        lines = [re.sub(r"[ \t]+", " ", line).strip() for line in raw.split("\n")]
+        cleaned = "\n".join(lines)
+        return re.sub(r"\n{3,}", "\n\n", cleaned).strip()
+
+
+def clean_html_text(raw: Any) -> str:
+    """剥离 HTML 标签并解码字符实体，保留正常换行与文本内容。"""
+    if raw is None:
+        return ""
+    text = str(raw)
+    if not text:
+        return ""
+    if "<" not in text and "&" not in text:
+        return text.strip()
+    parser = _PlainTextHTMLParser()
+    parser.feed(text)
+    parser.close()
+    result = parser.get_text()
+    # 处理双重转义实体（如 &amp;nbsp; -> &nbsp;）
+    if "&" in result:
+        result = html.unescape(result).replace("\xa0", " ").strip()
+    return result
 
 
 def _cover_proxy_url(album_id: str) -> str:
@@ -380,7 +443,7 @@ class JMProtocolAdapter:
             "tags": album.tags,
             "actors": album.actors,
             "works": album.works,
-            "description": album.description,
+            "description": clean_html_text(album.description),
             "page_count": album.page_count,
             "views": album.views,
             "likes": album.likes,
@@ -444,7 +507,7 @@ class JMProtocolAdapter:
                     {
                         "cid": str(rep.get("CID", "")),
                         "username": str(rep.get("username") or rep.get("nickname") or ""),
-                        "content": str(rep.get("content", "")),
+                        "content": clean_html_text(rep.get("content", "")),
                         "addtime": str(rep.get("addtime", "")),
                         "photo": str(rep.get("photo", "")),
                     }
@@ -455,7 +518,7 @@ class JMProtocolAdapter:
                     "username": str(c.get("username") or c.get("nickname") or ""),
                     "level": c.get("expinfo", {}).get("level") if isinstance(c.get("expinfo"), dict) else None,
                     "level_name": c.get("expinfo", {}).get("level_name") if isinstance(c.get("expinfo"), dict) else "",
-                    "content": str(c.get("content", "")),
+                    "content": clean_html_text(c.get("content", "")),
                     "likes": str(c.get("likes", "0")),
                     "addtime": str(c.get("addtime", "")),
                     "spoiler": str(c.get("spoiler", "0")) == "1",
@@ -520,7 +583,21 @@ class JMProtocolAdapter:
 
     def remove_favorite(self, album_id: str) -> None:
         client = self._require_auth_client()
-        client.remove_favorite_album(album_id=album_id)
+        if hasattr(client, "delete_favorite_album"):
+            client.delete_favorite_album(album_id=album_id)
+        else:
+            client.remove_favorite_album(album_id=album_id)
+
+    def daily_checkin(self) -> Dict[str, Any]:
+        client = self._require_auth_client()
+        if not hasattr(client, "daily_checkin"):
+            raise RuntimeError("当前协议通道不支持每日签到，请切换至 APP 端通道")
+        res = client.daily_checkin()
+        return {
+            "code": int(getattr(res, "code", 0)),
+            "msg": str(getattr(res, "msg", "")),
+            "already_checked_in": int(getattr(res, "code", 0)) == 1,
+        }
 
     def export_favorites_csv(self) -> str:
         client = self._require_auth_client()

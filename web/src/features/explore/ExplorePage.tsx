@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { ComicCard } from '../../components/ios/ComicCard';
-import { SegmentedControl } from '../../components/ios/IosControls';
+import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/ios/IosControls';
 
 const CATEGORIES = [
   { value: '0', label: '全部' },
@@ -56,11 +56,17 @@ export function ExplorePage() {
   const error = tab === 'ranking' ? rankQuery.error : tab === 'filter' ? filterQuery.error : weekListQuery.error;
 
   const albums = tab === 'week' ? weekListQuery.data?.albums || [] : activeData?.albums || [];
+  const pageSize = activeData?.page_size || 20;
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-[34px] font-bold tracking-tight leading-tight">分类与排行</h1>
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+            CHARTS &amp; GENRES
+          </p>
+          <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">排行与分类</h1>
+        </div>
         <SegmentedControl
           value={tab}
           onChange={(v) => {
@@ -76,7 +82,7 @@ export function ExplorePage() {
       </div>
 
       {tab === 'ranking' && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
           <SegmentedControl
             value={rankType}
             onChange={(v) => {
@@ -98,7 +104,7 @@ export function ExplorePage() {
                   setCategory(c.value);
                   setPage(1);
                 }}
-                className="px-3 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0"
+                className="px-3.5 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 transition-all"
                 style={{
                   backgroundColor: category === c.value ? 'var(--ios-blue)' : 'var(--ios-fill-tertiary)',
                   color: category === c.value ? '#ffffff' : 'var(--ios-label-primary)',
@@ -112,7 +118,7 @@ export function ExplorePage() {
       )}
 
       {tab === 'filter' && (
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
           <SegmentedControl
             value={orderBy}
             onChange={(v) => {
@@ -139,7 +145,7 @@ export function ExplorePage() {
               { value: 'm', label: '本月' },
             ]}
           />
-          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full pt-1">
             {CATEGORIES.map((c) => (
               <button
                 key={c.value}
@@ -148,7 +154,7 @@ export function ExplorePage() {
                   setCategory(c.value);
                   setPage(1);
                 }}
-                className="px-3 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0"
+                className="px-3.5 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 transition-all"
                 style={{
                   backgroundColor: category === c.value ? 'var(--ios-blue)' : 'var(--ios-fill-tertiary)',
                   color: category === c.value ? '#ffffff' : 'var(--ios-label-primary)',
@@ -162,22 +168,12 @@ export function ExplorePage() {
       )}
 
       {tab === 'week' && weekMetaQuery.data && (
-        <div className="flex flex-wrap items-center gap-3">
-          <select
+        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
+          <PillSelect
             value={activeWeekId}
-            onChange={(e) => setWeekCatId(e.target.value)}
-            className="rounded-xl px-3 py-2 text-[14px] outline-none"
-            style={{
-              backgroundColor: 'var(--ios-bg-secondary)',
-              border: '0.5px solid var(--ios-separator)',
-            }}
-          >
-            {weekMetaQuery.data.categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
-              </option>
-            ))}
-          </select>
+            onChange={setWeekCatId}
+            options={weekMetaQuery.data.categories.map((c) => ({ value: c.id, label: c.title }))}
+          />
           <SegmentedControl
             value={weekTypeId}
             onChange={setWeekTypeId}
@@ -191,18 +187,20 @@ export function ExplorePage() {
       )}
 
       {isLoading ? (
-        <div className="ios-card p-10 text-center text-[14px]" style={{ color: 'var(--ios-label-secondary)' }}>
-          加载中...
-        </div>
+        <SkeletonCardGrid count={10} />
       ) : error ? (
         <div className="ios-card p-8 text-center text-[14px]" style={{ color: 'var(--ios-red)' }}>
           加载失败：{(error as Error).message}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
-            {albums.map((a) => (
-              <ComicCard key={a.album_id} album={a} />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {albums.map((a, idx) => (
+              <ComicCard
+                key={a.album_id}
+                album={a}
+                rank={tab === 'ranking' ? (page - 1) * pageSize + idx + 1 : undefined}
+              />
             ))}
           </div>
 
@@ -212,20 +210,28 @@ export function ExplorePage() {
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-4 py-2 rounded-xl text-[14px] font-medium disabled:opacity-40 cursor-pointer"
-                style={{ backgroundColor: 'var(--ios-bg-secondary)', border: '0.5px solid var(--ios-separator)' }}
+                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--ios-bg-secondary)',
+                  border: '1px solid var(--ios-separator)',
+                  boxShadow: 'var(--ios-shadow-sm)',
+                }}
               >
                 上一页
               </button>
-              <span className="text-[13px] tabular-nums" style={{ color: 'var(--ios-label-secondary)' }}>
-                {page} / {activeData.page_count}
+              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--ios-label-secondary)' }}>
+                第 {page} / {activeData.page_count} 页
               </span>
               <button
                 type="button"
                 disabled={page >= activeData.page_count}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-4 py-2 rounded-xl text-[14px] font-medium disabled:opacity-40 cursor-pointer"
-                style={{ backgroundColor: 'var(--ios-bg-secondary)', border: '0.5px solid var(--ios-separator)' }}
+                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                style={{
+                  backgroundColor: 'var(--ios-bg-secondary)',
+                  border: '1px solid var(--ios-separator)',
+                  boxShadow: 'var(--ios-shadow-sm)',
+                }}
               >
                 下一页
               </button>

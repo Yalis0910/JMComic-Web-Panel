@@ -137,6 +137,16 @@ export function setPanelToken(token: string) {
   else localStorage.removeItem(TOKEN_KEY);
 }
 
+/** 为受 PIN 锁保护的图片或文件 URL（如 /api/v2/library/...）自动附加 token 查询参数。 */
+export function withPanelToken(url: string): string {
+  if (!url) return url;
+  const token = getPanelToken();
+  if (!token || !url.startsWith('/api/v2/library')) return url;
+  if (url.includes('token=')) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}token=${encodeURIComponent(token)}`;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(message: string, status: number) {
@@ -218,6 +228,7 @@ export const api = {
   addFavorite: (albumId: string, folderId = '0') =>
     request(`/user/favorites/${albumId}`, { method: 'POST', body: JSON.stringify({ folder_id: folderId }) }),
   removeFavorite: (albumId: string) => request(`/user/favorites/${albumId}`, { method: 'DELETE' }),
+  dailyCheckin: () => request<{ code: number; msg: string; already_checked_in: boolean }>('/user/checkin', { method: 'POST' }),
 
   listDownloads: () => request<DownloadTask[]>('/download/tasks'),
   createDownload: (albumId: string, downloadType: DownloadTask['download_type'] = 'folder', photoId?: string) =>

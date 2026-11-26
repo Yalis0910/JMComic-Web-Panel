@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:encrypt/encrypt.dart' as enc;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:jmcomic_panel_app/core/network/jm_crypto.dart';
+import 'package:jmlis/core/network/jm_crypto.dart';
 
 void main() {
   test('buildHeadersAuth computes md5 token and tokenparam', () {

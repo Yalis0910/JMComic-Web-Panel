@@ -38,18 +38,32 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
+      - name: Read app version from pubspec.yaml
+        id: ver
+        working-directory: mobile
+        run: |
+          VERSION=$(python3 -c '
+          import re
+          from pathlib import Path
+          text = Path("pubspec.yaml").read_text(encoding="utf-8")
+          m = re.search(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)", text, re.M)
+          print(m.group(1) if m else "2.0.0")
+          ')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - name: Bootstrap Android runner
         working-directory: mobile
         run: |
-          flutter create . --platforms=android --project-name jmcomic_panel_app --org com.jmcomic.panel
+          flutter create . --platforms=android --project-name jmlis --org com.jmlis.app
           rm -f test/widget_test.dart
-      - name: Configure AndroidManifest network permissions
+      - name: Configure AndroidManifest label & network permissions
         working-directory: mobile
         run: |
           python3 -c '
+          import re
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           text = manifest.read_text(encoding="utf-8")
+          text = re.sub(r"android:label=\"[^\"]*\"", "android:label=\"JMlis\"", text, count=1)
           if "android.permission.INTERNET" not in text:
               text = text.replace("<application", "<uses-permission android:name=\"android.permission.INTERNET\"/>\n    <application", 1)
           if "usesCleartextTraffic" not in text:
@@ -59,6 +73,9 @@ jobs:
       - name: Install Flutter packages
         working-directory: mobile
         run: flutter pub get
+      - name: Generate JMlis launcher icons
+        working-directory: mobile
+        run: dart run flutter_launcher_icons
       - name: Analyze Dart code
         working-directory: mobile
         run: flutter analyze --no-fatal-infos
@@ -67,9 +84,11 @@ jobs:
         run: flutter test
       - name: Build Android Release APK
         working-directory: mobile
-        run: flutter build apk --release
+        run: |
+          flutter build apk --release
+          cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/JMlis-v${{ steps.ver.outputs.version }}.apk"
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: jmcomic-hybrid-android-apk
-          path: mobile/build/app/outputs/flutter-apk/app-release.apk
+          name: JMlis-v${{ steps.ver.outputs.version }}
+          path: mobile/build/app/outputs/flutter-apk/JMlis-v${{ steps.ver.outputs.version }}.apk

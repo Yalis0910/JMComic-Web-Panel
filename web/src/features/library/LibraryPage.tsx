@@ -5,7 +5,7 @@ import { FolderOpen, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { api, type LocalComic } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/ios/ComicCard';
-import { BottomSheet, InsetGroup, InsetRow } from '../../components/ios/IosControls';
+import { BottomSheet, InsetGroup, InsetRow, SkeletonCardGrid } from '../../components/ios/IosControls';
 
 export function LibraryPage() {
   const navigate = useNavigate();
@@ -54,15 +54,20 @@ export function LibraryPage() {
   }, [items, filter]);
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-[34px] font-bold tracking-tight leading-tight">本地书库</h1>
+    <div className="space-y-6">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+            LOCAL ARCHIVE
+          </p>
+          <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">本地书库</h1>
+        </div>
         <button
           type="button"
           onClick={() => scanMutation.mutate()}
           disabled={scanMutation.isPending}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[14px] font-medium text-white cursor-pointer disabled:opacity-60"
-          style={{ backgroundColor: 'var(--ios-blue)' }}
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13.5px] font-semibold text-white cursor-pointer disabled:opacity-60"
+          style={{ background: 'var(--brand-gradient)' }}
         >
           <RefreshCw className={`w-4 h-4 ${scanMutation.isPending ? 'animate-spin' : ''}`} />
           扫描目录
@@ -71,7 +76,7 @@ export function LibraryPage() {
 
       <div className="relative">
         <Search
-          className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2"
+          className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2"
           style={{ color: 'var(--ios-label-secondary)' }}
         />
         <input
@@ -79,25 +84,27 @@ export function LibraryPage() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           placeholder="筛选本地已下载漫画..."
-          className="w-full rounded-[12px] pl-10 pr-4 py-2.5 text-[15px] outline-none"
-          style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+          className="w-full rounded-[14px] pl-11 pr-4 py-2.5 text-[14.5px] outline-none"
+          style={{
+            backgroundColor: 'var(--ios-bg-secondary)',
+            border: '1px solid var(--ios-separator)',
+            boxShadow: 'var(--ios-shadow-sm)',
+          }}
         />
       </div>
 
       {isLoading ? (
-        <div className="ios-card p-10 text-center text-[14px]" style={{ color: 'var(--ios-label-secondary)' }}>
-          加载本地书库...
-        </div>
+        <SkeletonCardGrid count={10} />
       ) : filtered.length === 0 ? (
-        <div className="ios-card p-10 text-center space-y-2">
-          <FolderOpen className="w-10 h-10 mx-auto opacity-35" />
-          <p className="text-[15px] font-medium">暂无本地已下载漫画</p>
+        <div className="ios-card p-12 text-center space-y-2">
+          <FolderOpen className="w-10 h-10 mx-auto opacity-30" />
+          <p className="text-[15px] font-semibold">暂无本地已下载漫画</p>
           <p className="text-[13px]" style={{ color: 'var(--ios-label-secondary)' }}>
             下载的文件夹或 ZIP 漫画会自动出现在这里，局域网内可高速离线直读
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filtered.map((item) => (
             <ComicCard
               key={item.album_id}
@@ -122,7 +129,7 @@ export function LibraryPage() {
       >
         {selected && (
           <div className="space-y-4">
-            <div className="text-[12.5px] break-all" style={{ color: 'var(--ios-label-secondary)' }}>
+            <div className="text-[12.5px] break-all px-1" style={{ color: 'var(--ios-label-secondary)' }}>
               路径：{selected.path}
             </div>
             <InsetGroup title={`章节 (${detail?.chapters?.length || selected.chapter_count})`}>
@@ -138,7 +145,7 @@ export function LibraryPage() {
                       navigate(`/read/local/${selected.album_id}/${ch.chapter_id}`);
                     }}
                     right={
-                      <span className="text-[13px] font-medium" style={{ color: 'var(--ios-blue)' }}>
+                      <span className="text-[13px] font-semibold" style={{ color: 'var(--ios-blue)' }}>
                         阅读
                       </span>
                     }

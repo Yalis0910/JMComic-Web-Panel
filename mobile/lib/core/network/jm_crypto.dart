@@ -5,11 +5,11 @@ import 'package:crypto/crypto.dart';
 import 'package:encrypt/encrypt.dart' as enc;
 
 class JmCrypto {
-  static const String appTokenSecret = '18comicAPP';
+  static const String appTokenSecret = '185Hcomic3PAPP7R';
   static const String appTokenSecret2 = '18comicAPPContent';
   static const String appDataSecret = '185Hcomic3PAPP7R';
   static const String apiDomainServerSecret = 'diosfjckwpqpdfjkvnqQjsik';
-  static String appVersion = '2.0.21';
+  static String appVersion = '2.1.14';
 
   static String md5Hex(String input) {
     return md5.convert(utf8.encode(input)).toString();

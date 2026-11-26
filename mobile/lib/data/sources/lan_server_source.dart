@@ -1,7 +1,9 @@
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../../core/utils/html_cleaner.dart';
 import '../models/comic_models.dart';
 import 'comic_data_source.dart';
 
@@ -25,6 +27,12 @@ class LanServerSource implements ComicDataSource {
   @override
   ActiveMode get mode => ActiveMode.lanServer;
 
+  @override
+  bool get supportsPostingComments => true;
+
+  Map<String, String> get _authHeaders =>
+      panelToken.isNotEmpty ? {'X-Panel-Token': panelToken} : const {};
+
   String _absUrl(String path) {
     if (path.startsWith('http')) return path;
     final cleanBase = baseUrl.replaceAll(RegExp(r'/$'), '');
@@ -36,8 +44,10 @@ class LanServerSource implements ComicDataSource {
       albumId: '${m['album_id'] ?? ''}',
       title: '${m['title'] ?? ''}',
       author: '${m['author'] ?? ''}',
+      category: '${m['category'] ?? ''}',
       tags: (m['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
       coverUrl: _absUrl('${m['cover_url'] ?? '/api/v2/media/cover/${m['album_id']}'}'),
+      coverHeaders: _authHeaders,
     );
   }
 
@@ -82,7 +92,7 @@ class LanServerSource implements ComicDataSource {
       title: '${d['title'] ?? ''}',
       authors: (d['authors'] as List?)?.map((e) => '$e').toList() ?? const [],
       tags: (d['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
-      description: '${d['description'] ?? ''}',
+      description: cleanCommentHtml('${d['description'] ?? ''}'),
       views: '${d['views'] ?? '0'}',
       likes: '${d['likes'] ?? '0'}',
       commentCount: (d['comment_count'] as num?)?.toInt() ?? 0,
@@ -112,7 +122,7 @@ class LanServerSource implements ComicDataSource {
           (i) => ChapterImageItem(
             index: (i['index'] as num?)?.toInt() ?? 1,
             url: _absUrl('${i['proxy_url']}'),
-            scrambleId: 0, // 服务端已完成条带解密
+            scrambleId: 0,
           ),
         )
         .toList();
@@ -122,16 +132,30 @@ class LanServerSource implements ComicDataSource {
   Future<List<CommentItemModel>> getComments(String albumId, {int page = 1}) async {
     final resp = await _dio.get('/api/v2/album/$albumId/comments', queryParameters: {'page': page});
     final list = (resp.data['data']['comments'] as List?) ?? const [];
-    return list
-        .map(
-          (c) => CommentItemModel(
-            cid: '${c['cid']}',
-            username: '${c['username']}',
-            content: '${c['content']}',
-            addtime: '${c['addtime']}',
-          ),
-        )
-        .toList();
+    return list.map((raw) {
+      final c = Map<String, dynamic>.from(raw);
+      final rawReplies = (c['replies'] as List?) ?? const [];
+      return CommentItemModel(
+        cid: '${c['cid'] ?? ''}',
+        username: '${c['username'] ?? ''}',
+        levelName: '${c['level_name'] ?? ''}',
+        content: cleanCommentHtml('${c['content'] ?? ''}'),
+        likes: '${c['likes'] ?? '0'}',
+        addtime: '${c['addtime'] ?? ''}',
+        spoiler: c['spoiler'] == true,
+        replies: rawReplies
+            .map((r) {
+              final rep = Map<String, dynamic>.from(r);
+              return CommentReplyModel(
+                cid: '${rep['cid'] ?? ''}',
+                username: '${rep['username'] ?? ''}',
+                content: cleanCommentHtml('${rep['content'] ?? ''}'),
+                addtime: '${rep['addtime'] ?? ''}',
+              );
+            })
+            .toList(),
+      );
+    }).toList();
   }
 
   @override
@@ -153,5 +177,99 @@ class LanServerSource implements ComicDataSource {
     );
     final items = (resp.data['data']['items'] as List?) ?? const [];
     return items.map((e) => HistoryRecord.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  UserAccountStatus _parseUserStatus(Map<String, dynamic> d) {
+    final loggedIn = d['is_logged_in'] == true;
+    if (!loggedIn) return UserAccountStatus.empty;
+    final profile = d['profile'] is Map ? Map<String, dynamic>.from(d['profile']) : const {};
+    return UserAccountStatus(
+      isLoggedIn: true,
+      uid: '${profile['uid'] ?? ''}',
+      username: '${d['username'] ?? profile['username'] ?? ''}',
+      levelName: '${profile['level_name'] ?? ''}',
+      level: (profile['level'] as num?)?.toInt() ?? 1,
+      coin: (profile['coin'] as num?)?.toInt() ?? 0,
+      exp: '${profile['exp'] ?? '0'}',
+      expPercent: (profile['exp_percent'] as num?)?.toDouble() ?? 0,
+      favoritesCount: (profile['album_favorites'] as num?)?.toInt() ?? 0,
+      favoritesMax: (profile['album_favorites_max'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  @override
+  Future<UserAccountStatus> login(String username, String password) async {
+    final resp = await _dio.post(
+      '/api/v2/user/login',
+      data: {'username': username, 'password': password, 'impl': 'api'},
+    );
+    return _parseUserStatus(Map<String, dynamic>.from(resp.data['data']));
+  }
+
+  @override
+  Future<void> logout() async {
+    await _dio.post('/api/v2/user/logout');
+  }
+
+  @override
+  Future<UserAccountStatus> getUserStatus() async {
+    final resp = await _dio.get('/api/v2/user/status');
+    return _parseUserStatus(Map<String, dynamic>.from(resp.data['data']));
+  }
+
+  @override
+  Future<FavoritePageResult> getFavorites({
+    int page = 1,
+    String folderId = '0',
+    String orderBy = 'mr',
+  }) async {
+    final resp = await _dio.get(
+      '/api/v2/user/favorites',
+      queryParameters: {'page': page, 'folder_id': folderId, 'order_by': orderBy},
+    );
+    final d = Map<String, dynamic>.from(resp.data['data']);
+    final albums = ((d['albums'] as List?) ?? const [])
+        .map((a) => _parseSummary(Map<String, dynamic>.from(a)))
+        .toList();
+    final folders = ((d['folders'] as List?) ?? const [])
+        .map((f) {
+          final fm = Map<String, dynamic>.from(f);
+          return FavoriteFolder(folderId: '${fm['folder_id'] ?? ''}', name: '${fm['name'] ?? ''}');
+        })
+        .toList();
+    return FavoritePageResult(
+      albums: albums,
+      folders: folders,
+      total: (d['total'] as num?)?.toInt() ?? albums.length,
+      pageCount: max(1, (d['page_count'] as num?)?.toInt() ?? 1),
+    );
+  }
+
+  @override
+  Future<void> addFavorite(String albumId, {String folderId = '0'}) async {
+    await _dio.post('/api/v2/user/favorites/$albumId', data: {'folder_id': folderId});
+  }
+
+  @override
+  Future<void> removeFavorite(String albumId) async {
+    await _dio.delete('/api/v2/user/favorites/$albumId');
+  }
+
+  @override
+  Future<CheckinResult> dailyCheckin() async {
+    final resp = await _dio.post('/api/v2/user/checkin');
+    final d = Map<String, dynamic>.from(resp.data['data'] ?? const {});
+    return CheckinResult(
+      alreadyCheckedIn: d['already_checked_in'] == true,
+      message: '${d['msg'] ?? resp.data['message'] ?? '签到完成'}',
+    );
+  }
+
+  @override
+  Future<void> postComment(String albumId, String comment, {String? commentId, bool spoiler = false}) async {
+    await _dio.post(
+      '/api/v2/album/$albumId/comments',
+      data: {'comment': comment, 'comment_id': commentId, 'spoiler': spoiler},
+    );
   }
 }

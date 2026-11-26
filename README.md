@@ -1,6 +1,6 @@
-# JMComic Panel & Hybrid App
+# JMlis — 跨平台漫画阅读与管理系统
 
-面向**本地 / 局域网自托管 + 手机外出直连**的双端漫画阅读与管理系统，采用 **iOS 系统界面风格（Apple HIG / Cupertino）** 统一设计。
+面向**本地 / 局域网自托管 + 手机外出直连**的双端漫画阅读与管理系统，采用现代 **Apple Editorial / Cupertino 磨砂玻璃** 视觉风格统一设计。
 
 ## 工程结构
 
@@ -67,11 +67,12 @@ cd web && npm run build
 
 ```bash
 cd mobile
-flutter create . --platforms=android,ios
+flutter create . --platforms=android,ios --project-name jmlis --org com.jmlis.app
 flutter pub get
+dart run flutter_launcher_icons
 flutter analyze
 flutter test
 flutter build apk --release
 ```
 
-若本机未安装 Flutter SDK，推送代码到 GitHub 后可通过 `.github/workflows/build-app.yml` 自动执行测试并下载构建好的 Android APK 产物。
+若本机未安装 Flutter SDK，推送代码到 GitHub 后可通过 `.github/workflows/build-app.yml` 自动执行测试并下载构建好的 `JMlis-v<version>.apk` 安装包产物。

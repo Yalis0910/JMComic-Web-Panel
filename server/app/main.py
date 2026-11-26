@@ -27,8 +27,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="JMComic Panel Server",
-    description="JMComic 本地/局域网统一服务端 API v2",
+    title="JMlis Server",
+    description="JMlis 本地/局域网统一服务端 API v2",
     version="2.0.0",
     lifespan=lifespan,
 )
@@ -66,7 +66,7 @@ else:
     @app.get("/")
     async def root_info():
         return {
-            "service": "JMComic Panel Server",
+            "service": "JMlis Server",
             "version": "2.0.0",
             "docs": "/docs",
             "note": "Web 前端尚未构建，请运行 `cd web && npm run build` 或使用 Vite 开发服务器。",

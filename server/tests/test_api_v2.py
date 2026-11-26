@@ -160,3 +160,12 @@ def test_api_v2_end_to_end(tmp_path: Path, monkeypatch):
         assert r_unlock.status_code == 200
         token = r_unlock.json()["data"]["token"]
         assert client.get("/api/v2/library", headers={"X-Panel-Token": token}).status_code == 200
+
+
+def test_clean_html_text_strips_tags_and_entities():
+    from app.services.jm_adapter import clean_html_text
+
+    raw = "<div style='flex-direction:row;flex-wrap:wrap;'>畫風很棒<br/>第二行&nbsp;&amp;&nbsp;&#39;測試&#39;</div>"
+    assert clean_html_text(raw) == "畫風很棒\n第二行 & '測試'"
+    assert clean_html_text("<p>第一段</p><p>第二段</p>") == "第一段\n第二段"
+    assert clean_html_text(None) == ""

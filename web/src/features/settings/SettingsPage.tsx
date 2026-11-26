@@ -95,7 +95,12 @@ export function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <h1 className="text-[34px] font-bold tracking-tight leading-tight">设置</h1>
+      <div>
+        <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+          PREFERENCES · JMLIS
+        </p>
+        <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">系统设置</h1>
+      </div>
 
       <InsetGroup title="外观与阅读器（本地即时生效）">
         <InsetRow

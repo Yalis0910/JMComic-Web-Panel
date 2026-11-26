@@ -217,7 +217,7 @@ class DirectJmSource implements ComicDataSource {
     final d = Map<String, dynamic>.from(await _reqApi('/album', query: {'id': albumId}));
     final series = (d['series'] as List?) ?? const [];
     final episodes = series.isEmpty
-        ? [ComicEpisode(photoId: '$albumId', index: 1, name: '${d['name'] ?? ''}')]
+        ? [ComicEpisode(photoId: albumId, index: 1, name: '${d['name'] ?? ''}')]
         : series
             .map(
               (s) => ComicEpisode(

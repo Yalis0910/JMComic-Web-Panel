@@ -44,9 +44,9 @@ class _RootTabScaffold extends StatelessWidget {
       ),
       tabBuilder: (ctx, index) {
         return switch (index) {
-          0 => const CupertinoTabView(builder: (_) => HomeScreen()),
-          1 => const CupertinoTabView(builder: (_) => ExploreScreen()),
-          _ => const CupertinoTabView(builder: (_) => SettingsScreen()),
+          0 => CupertinoTabView(builder: (_) => const HomeScreen()),
+          1 => CupertinoTabView(builder: (_) => const ExploreScreen()),
+          _ => CupertinoTabView(builder: (_) => const SettingsScreen()),
         };
       },
     );

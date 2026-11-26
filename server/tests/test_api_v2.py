@@ -1,0 +1,162 @@
+import importlib
+import os
+import zipfile
+from io import BytesIO
+from pathlib import Path
+
+from fastapi.testclient import TestClient
+from PIL import Image
+
+
+def _make_png_bytes(color=(10, 120, 220)) -> bytes:
+    img = Image.new("RGB", (32, 32), color=color)
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def test_api_v2_end_to_end(tmp_path: Path, monkeypatch):
+    from app.core.config import config_manager
+    from app.services.jm_adapter import jm_adapter
+    import app.main as main_mod
+
+    config_manager.configure_data_dir(tmp_path / "data")
+
+    # 在下载目录造一本文件夹漫画与一本 ZIP 漫画
+    dl_dir = Path(config_manager.get_settings().download_dir)
+    folder_comic = dl_dir / "[Test] Demo Comic 123456"
+    (folder_comic / "01_第一话").mkdir(parents=True, exist_ok=True)
+    (folder_comic / "01_第一话" / "001.png").write_bytes(_make_png_bytes((255, 0, 0)))
+    (folder_comic / "01_第一话" / "002.png").write_bytes(_make_png_bytes((0, 255, 0)))
+
+    zip_path = dl_dir / "Archive_654321.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.writestr("001.png", _make_png_bytes((0, 0, 255)))
+
+    monkeypatch.setattr(
+        jm_adapter,
+        "get_promote",
+        lambda page=1: {
+            "sections": [
+                {
+                    "id": "1",
+                    "title": "本周精选",
+                    "slug": "weekly",
+                    "type": "album",
+                    "albums": [
+                        {
+                            "album_id": "123456",
+                            "title": "Demo Title",
+                            "author": "Tester",
+                            "tags": ["全彩"],
+                            "category": "同人",
+                            "cover_url": "/api/v2/media/cover/123456",
+                        }
+                    ],
+                }
+            ]
+        },
+    )
+    monkeypatch.setattr(
+        jm_adapter,
+        "get_comments",
+        lambda album_id, page=1: {
+            "comments": [
+                {
+                    "cid": "99",
+                    "username": "reader",
+                    "level": 3,
+                    "level_name": "绅士",
+                    "content": "画风很棒",
+                    "likes": "12",
+                    "addtime": "2026-01-01",
+                    "spoiler": False,
+                    "replies": [],
+                }
+            ],
+            "total": 1,
+            "page": page,
+        },
+    )
+
+    with TestClient(main_mod.app) as client:
+        # 1. 健康检查
+        r = client.get("/api/v2/system/health")
+        assert r.status_code == 200
+        assert r.json()["data"]["status"] == "ok"
+
+        # 2. 发现页与评论接口
+        r_promote = client.get("/api/v2/discovery/promote")
+        assert r_promote.status_code == 200
+        assert r_promote.json()["data"]["sections"][0]["albums"][0]["album_id"] == "123456"
+
+        r_comments = client.get("/api/v2/album/123456/comments")
+        assert r_comments.status_code == 200
+        assert r_comments.json()["data"]["comments"][0]["content"] == "画风很棒"
+
+        # 3. 本地书库扫描与阅读
+        r_lib = client.get("/api/v2/library")
+        assert r_lib.status_code == 200
+        ids = {item["album_id"] for item in r_lib.json()["data"]}
+        assert "123456" in ids and "654321" in ids
+
+        r_detail = client.get("/api/v2/library/123456")
+        assert r_detail.status_code == 200
+        assert r_detail.json()["data"]["chapters"][0]["page_count"] == 2
+
+        r_page = client.get("/api/v2/library/123456/page/1/0")
+        assert r_page.status_code == 200
+        assert r_page.headers["content-type"].startswith("image/png")
+
+        r_zip_page = client.get("/api/v2/library/654321/page/1/0")
+        assert r_zip_page.status_code == 200
+
+        # 4. 跨端阅读进度同步 (LWW)
+        r_sync = client.post(
+            "/api/v2/sync/history/merge",
+            json={
+                "since_ms": 0,
+                "items": [
+                    {
+                        "album_id": "123456",
+                        "photo_id": "123456",
+                        "title": "Demo",
+                        "page_index": 5,
+                        "total_pages": 20,
+                        "updated_at": 2000,
+                    }
+                ],
+            },
+        )
+        assert r_sync.status_code == 200
+        assert r_sync.json()["data"]["items"][0]["page_index"] == 5
+
+        # 用旧时间戳覆盖应该被忽略，保留较新的 page_index=5
+        r_sync_old = client.post(
+            "/api/v2/sync/history/merge",
+            json={
+                "since_ms": 0,
+                "items": [
+                    {
+                        "album_id": "123456",
+                        "photo_id": "123456",
+                        "title": "Demo",
+                        "page_index": 1,
+                        "total_pages": 20,
+                        "updated_at": 1000,
+                    }
+                ],
+            },
+        )
+        assert r_sync_old.status_code == 200
+        assert r_sync_old.json()["data"]["items"][0]["page_index"] == 5
+
+        # 5. 开启 PIN 锁保护验证
+        r_pin = client.post("/api/v2/system/pin", json={"enabled": True, "pin": "1234"})
+        assert r_pin.status_code == 200
+        assert client.get("/api/v2/library").status_code == 401
+
+        r_unlock = client.post("/api/v2/system/unlock", json={"pin": "1234"})
+        assert r_unlock.status_code == 200
+        token = r_unlock.json()["data"]["token"]
+        assert client.get("/api/v2/library", headers={"X-Panel-Token": token}).status_code == 200

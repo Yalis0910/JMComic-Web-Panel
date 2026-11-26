@@ -1,122 +1,77 @@
-# JMComic Web Panel
+# JMComic Panel & Hybrid App
 
-基于 [JMComic-Crawler-Python](https://github.com/hect0x7/JMComic-Crawler-Python) 的 Web 面板，在浏览器里完成搜索、浏览、在线阅读、下载和收藏管理。
+面向**本地 / 局域网自托管 + 手机外出直连**的双端漫画阅读与管理系统，采用 **iOS 系统界面风格（Apple HIG / Cupertino）** 统一设计。
 
-## 功能
+## 工程结构
 
-### 搜索
+```text
+├── server/          # FastAPI + SQLite 异步本地服务端 (API v2 + SSE + 本地书库)
+├── web/             # React 19 + TypeScript + Vite + Tailwind CSS (iOS 风格响应式面板)
+├── mobile/          # Flutter 原生 Cupertino 混合双模式 App (局域网连服务端 / 外出直连禁漫)
+├── .github/         # GitHub Actions 云端自动构建 Android APK 与全端测试
+└── start-panel.bat  # Windows 一键启动脚本
+```
 
-- 关键词搜索，支持按最新 / 观看 / 点赞排序
-- 按作者搜索、按标签搜索
-- 分页浏览结果
-- 搜索框记录最近搜索，支持 ↑ / ↓ 键盘选择、Enter 确认、输入时实时过滤
+## 核心特性
 
-### 排行榜与分类
+### 1. 本地 / 局域网服务端 (`server/`)
+- **协议封装与扩展**：基于标准 `jmcomic` 库并扩展 APP 端接口，支持首页精选推荐 (`/promote`)、最新更新 (`/latest`)、每周必看 (`/week`)、排行榜、分类/副分类筛选、站内/作者/标签/作品/角色搜索、详情与相关推荐、评论列表与发表。
+- **非阻塞图片与封面代理**：图片反混淆与封面拉取均运行在线程池中并支持双上限 LRU 磁盘缓存（文件数 + 总体积），彻底避免阻塞事件循环与浏览器直连 CDN 被屏蔽问题。
+- **本地已下载书库**：自动扫描下载目录（文件夹与 `.zip` 归档），Web 与 App 可直接在局域网高速阅读本地漫画。
+- **SQLite + SSE**：下载任务队列与阅读历史持久化到 SQLite，支持 SSE 实时进度推送及多端 LWW（Last-Write-Wins）增量进度同步；支持可选局域网 PIN 码锁保护。
 
-- 日榜 / 周榜 / 月榜
-- 分类筛选
+### 2. Web 端 (`web/`)
+- 遵循 **Apple HIG** 视觉规范：Light / Dark 自适应、`0.5px` 分割线、毛玻璃侧边栏与移动端底栏、Inset Grouped 分组列表、Segmented Control、Bottom Sheet。
+- **全新多模式阅读器**：支持纵向条漫、单页左→右、单页日漫右→左、双页跨页四种模式，支持并发预加载、单页失败重试、缩略图抽屉与快捷键。
 
-### 漫画阅读器
-
-- 在线阅读，支持缩放、全屏、宽度自适应
-- 缩略图导航（设置页可关闭，关闭后完全禁用）
-- 多章节漫画支持上一话 / 下一话切换，缩略图条内可直接下拉选择章节
-- 读到最后一页提示一键进入下一话
-- 键盘快捷键：方向键翻页，空格按屏滚动，+ / - 缩放，`[` / `]` 切换章节，q / Esc / Backspace 退出，`?` / h 呼出快捷键帮助
-- 触摸手势：点击切页、双击缩放、双指捏合
-- 阅读进度自动记录，首页「继续阅读」从上次位置继续
-- 亮 / 暗主题
-
-### 下载管理
-
-- Web 端创建下载任务，支持图片文件夹、ZIP、PDF、长图格式
-- 实时进度、速度与剩余时间
-- 取消、失败重试、删除任务
-- 下载历史持久化
-
-### 用户与收藏
-
-- 登录 / 登出（网页端、APP 端客户端）
-- 密码本地加密存储，Session 持久化；会话失效时自动重建，登录过期自动提示重新登录
-- 收藏夹管理：文件夹分组、排序、批量下载
-
-### 图片服务
-
-- 图片代理自动解密条带打乱的图片
-- 服务端磁盘缓存解密结果，默认 `jmweb/data/image-cache/`，按文件数或总大小自动淘汰最久未使用的文件
-- 缓存目录、文件上限、大小上限可在设置页修改，支持一键清空
-- 图片响应带 14 天浏览器缓存
-
-### 历史
-
-- 独立历史页：阅读记录（进度条、已读完标记、单条删除 / 清空）与最近搜索（单条删除 / 清空）
-
-### 配置
-
-- 设置页在线编辑 `option.yml`
-- 客户端类型、下载目录、目录规则、并发数直接修改
-
-## 技术说明
-
-- 纯原生 JS 单页应用，无框架
-- hash 路由，每个页面有独立 URL（如 `#/search?q=xxx&page=2`），支持前进 / 后退、刷新保持状态、直接分享
-- 列表数据内存缓存 10 分钟，返回页面不重复请求
-- 共享 JM 客户端池，复用会话与域名缓存
-- 移动端底部标签栏，桌面端顶部导航
-- 亮 / 暗 / 跟随系统三种主题
-- 网格卡片悬停快捷操作（阅读 / 下载），详情页数据胶囊与 ID 复制
+### 3. 混合模式 App (`mobile/`)
+- **局域网模式（LAN Server）**：连接本地 `server/`，享受磁盘缓存加速、本地已下载书库直读、服务端下载控制及进度双向合并。
+- **外出直连模式（Direct JM）**：离开局域网自动切换为手机直连禁漫，内置 Dart 版 `JmCrypto`（Token 签名 + AES-ECB 解密）与 `JmImageDecoder`（Isolate 后台条带还原），支持章节离线缓存，回连局域网后自动同步阅读进度。
 
 ## 快速开始
 
-需要 Python 3.9+。
+### 1. 启动后端与 Web 面板
+
+需要 Python 3.10+ 与 Node.js 20+：
 
 ```bash
-git clone https://github.com/Yalis0910/JMComic-Web-Panel.git
-cd JMComic-Web-Panel
-pip install -e .
-python -m jmweb.main
+# 安装服务端依赖
+pip install -e "./server[dev]"
+
+# 构建 Web 前端（仅首次或前端更新时需要）
+cd web
+npm install
+npm run build
+cd ..
+
+# 启动服务（默认监听 http://0.0.0.0:8800）
+set PYTHONPATH=server
+python -m app.main
 ```
 
-Windows 也可以直接双击 `start-web.bat`。
+Windows 用户也可以直接双击 `start-panel.bat`。启动后访问 <http://127.0.0.1:8800> 即可使用（局域网设备可通过主机内网 IP 访问）。
 
-浏览器打开 <http://127.0.0.1:8800> 进入面板。
+### 2. 运行自动化测试
 
-服务默认监听 8800 端口，修改 `jmweb/main.py` 中的 `port` 参数即可。
+```bash
+# 后端单元测试
+python -m pytest server/tests -v
 
-## 配置文件
-
-| 文件 | 说明 |
-| --- | --- |
-| `config/option.yml` | JMComic 本体配置，设置页可直接编辑 |
-| `config/web-config.json` | 面板自身配置，包含图片缓存目录、文件上限与大小上限，设置页修改后立即生效 |
-
-## 项目结构
-
-```
-jmweb/                  # Web 面板模块
-├── main.py             # FastAPI 入口
-├── api/
-│   ├── album.py        # 专辑 / 图片详情、图片代理（解密 + 磁盘缓存）
-│   ├── search.py       # 搜索（关键词 / 作者 / 标签）
-│   ├── category.py     # 排行榜 / 分类
-│   ├── download.py     # 下载任务管理
-│   ├── config.py       # 配置读写
-│   ├── deps.py         # 共享 JM 客户端池
-│   └── user.py         # 登录 / 收藏
-├── utils/
-│   ├── cache.py        # 图片磁盘缓存（文件数 + 大小上限淘汰）
-│   ├── progress.py     # 下载进度管理
-│   ├── session.py      # 用户 Session（AES 加密、失效自动重建）
-│   └── web_config.py   # 面板配置（图片缓存）
-├── static/             # 前端
-│   ├── index.html
-│   ├── css/            # tokens.css / style.css / reader.css
-│   └── js/             # router.js / app.js / components.js / history.js / reader/
-└── data/               # 运行时数据（session、图片缓存，不入库）
-config/                 # 配置文件（不入库）
-start-web.bat           # Windows 一键启动
+# Web 前端类型检查与构建
+cd web && npm run build
 ```
 
-## License
+### 3. 构建 Flutter App
 
-与上游项目相同，见 [LICENSE](./LICENSE)。
+若本机已安装 Flutter SDK：
+
+```bash
+cd mobile
+flutter create . --platforms=android,ios
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --release
+```
+
+若本机未安装 Flutter SDK，推送代码到 GitHub 后可通过 `.github/workflows/build-app.yml` 自动执行测试并下载构建好的 Android APK 产物。

@@ -1,8 +1,12 @@
 # this repo
-/assets/download/
+/server/data/
+/web/node_modules/
+/web/dist/
+/mobile/.dart_tool/
+/mobile/build/
+/mobile/android/
+/mobile/ios/
 /config/
-/docs/
-/jmweb/data/
 
 
 # Byte-compiled / optimized / DLL files

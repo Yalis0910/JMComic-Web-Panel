@@ -1,0 +1,27 @@
+name: jmcomic_panel_app
+description: JMComic Hybrid iOS-style App (LAN Server + Direct JM Mode)
+publish_to: "none"
+version: 2.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  flutter_riverpod: ^2.6.1
+  dio: ^5.7.0
+  crypto: ^3.0.6
+  encrypt: ^5.0.3
+  image: ^4.5.3
+  shared_preferences: ^2.3.5
+  path_provider: ^2.1.5
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: false

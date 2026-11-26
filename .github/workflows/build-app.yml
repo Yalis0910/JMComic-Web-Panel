@@ -61,7 +61,18 @@ jobs:
         run: flutter pub get
       - name: Analyze Dart code
         working-directory: mobile
-        run: flutter analyze
+        run: |
+          set +e
+          flutter analyze > analyze.log 2>&1
+          code=$?
+          cat analyze.log
+          python3 -c '
+          for line in open("analyze.log", encoding="utf-8"):
+              line = line.strip()
+              if line:
+                  print(f"::error::{line}")
+          '
+          exit $code
       - name: Run Flutter unit tests
         working-directory: mobile
         run: flutter test

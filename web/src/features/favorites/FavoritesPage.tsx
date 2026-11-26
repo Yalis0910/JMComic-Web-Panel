@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarCheck, Download, LogOut, Trash2 } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Check, Download, LogOut, Sparkles, Trash2 } from 'lucide-react';
 import { api, getPanelToken } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
-import { InsetGroup, PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { BottomSheet, InsetGroup, PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 
 export function FavoritesPage() {
   const [params, setParams] = useSearchParams();
@@ -19,6 +19,7 @@ export function FavoritesPage() {
   const [folderId, setFolderId] = useState('0');
   const [orderBy, setOrderBy] = useState('mr');
   const [page, setPage] = useState(1);
+  const [dailyOpen, setDailyOpen] = useState(false);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -65,8 +66,15 @@ export function FavoritesPage() {
     onSuccess: (res) => {
       showToast(res.msg || (res.already_checked_in ? '今日已签到' : '签到成功'), 'success');
       queryClient.invalidateQueries({ queryKey: ['userStatus'] });
+      queryClient.invalidateQueries({ queryKey: ['dailyInfo'] });
     },
     onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const { data: dailyInfo, isLoading: dailyLoading, error: dailyError } = useQuery({
+    queryKey: ['dailyInfo'],
+    queryFn: api.getDailyInfo,
+    enabled: !!status?.is_logged_in && dailyOpen,
   });
 
   const exportCsv = () => {
@@ -209,6 +217,14 @@ export function FavoritesPage() {
                 style={{ backgroundColor: 'var(--liquid-scene)' }}
               >
                 <CalendarCheck className="w-3.5 h-3.5" /> {checkinMutation.isPending ? '签到中...' : '每日签到'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setDailyOpen(true)}
+                className="min-h-[40px] inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-medium cursor-pointer liquid-tactile"
+                style={{ backgroundColor: 'var(--liquid-fill-soft)', border: '1px solid var(--liquid-separator)' }}
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> 签到日历
               </button>
               <button
                 type="button"
@@ -364,6 +380,94 @@ export function FavoritesPage() {
           )}
         </div>
       )}
+
+      {/* 签到日历 Sheet */}
+      <BottomSheet open={dailyOpen} onClose={() => setDailyOpen(false)} title={dailyInfo?.event_name || '每日签到日历'}>
+        {dailyLoading ? (
+          <div className="py-10 text-center text-[13.5px]" style={{ color: 'var(--liquid-muted)' }}>
+            正在获取签到日历...
+          </div>
+        ) : dailyError ? (
+          <div className="py-8 text-center text-[13.5px]" style={{ color: 'var(--liquid-danger)' }}>
+            获取失败：{(dailyError as Error).message}
+          </div>
+        ) : dailyInfo ? (
+          <div className="space-y-5">
+            <div className="liquid-solid-card p-4 space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[14px] font-semibold">
+                  本月累计打卡 <span className="tabular-nums">{dailyInfo.streak_days}</span> 天
+                </span>
+                {dailyInfo.progress_text && (
+                  <span
+                    className="px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold tabular-nums"
+                    style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+                  >
+                    进度 {dailyInfo.progress_text}
+                  </span>
+                )}
+              </div>
+              {(dailyInfo.rewards.three_days_coin || dailyInfo.rewards.seven_days_coin) && (
+                <div className="flex flex-wrap gap-2 text-[12px]" style={{ color: 'var(--liquid-muted)' }}>
+                  {dailyInfo.rewards.three_days_coin && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ backgroundColor: 'var(--liquid-fill-soft)' }}>
+                      <Sparkles className="w-3 h-3" style={{ color: 'var(--liquid-accent)' }} />
+                      满3天：+{dailyInfo.rewards.three_days_coin} 金币 / +{dailyInfo.rewards.three_days_exp} EXP
+                    </span>
+                  )}
+                  {dailyInfo.rewards.seven_days_coin && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full" style={{ backgroundColor: 'var(--liquid-fill-soft)' }}>
+                      <Sparkles className="w-3 h-3" style={{ color: 'var(--liquid-accent)' }} />
+                      满7天：+{dailyInfo.rewards.seven_days_coin} 金币 / +{dailyInfo.rewards.seven_days_exp} EXP
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {dailyInfo.days.map((d) => {
+                const isSigned = d.signed === true;
+                const isMissed = d.signed === false;
+                return (
+                  <div
+                    key={`${d.day}-${d.label}`}
+                    className="aspect-square rounded-[14px] flex flex-col items-center justify-center gap-0.5 text-[12px] font-semibold relative"
+                    style={{
+                      backgroundColor: isSigned
+                        ? 'var(--liquid-scene)'
+                        : isMissed
+                          ? 'var(--liquid-fill-soft)'
+                          : 'var(--liquid-solid)',
+                      color: isSigned ? '#ffffff' : isMissed ? 'var(--liquid-muted)' : 'var(--liquid-ink)',
+                      border: d.bonus
+                        ? '1.5px solid var(--liquid-accent)'
+                        : '1px solid var(--liquid-separator)',
+                    }}
+                  >
+                    <span className="tabular-nums">{d.label || d.day}</span>
+                    {isSigned ? (
+                      <Check className="w-3 h-3" />
+                    ) : d.bonus ? (
+                      <span className="text-[9px]" style={{ color: 'var(--liquid-accent)' }}>奖励</span>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              disabled={checkinMutation.isPending || dailyInfo.checked_in_today}
+              onClick={() => checkinMutation.mutate()}
+              className="w-full min-h-[44px] rounded-full text-[14px] font-semibold text-white cursor-pointer disabled:opacity-55 liquid-tactile"
+              style={{ backgroundColor: 'var(--liquid-scene)' }}
+            >
+              {dailyInfo.checked_in_today ? '今日已完成打卡' : checkinMutation.isPending ? '签到中...' : '立即打卡签到'}
+            </button>
+          </div>
+        ) : null}
+      </BottomSheet>
     </div>
   );
 }

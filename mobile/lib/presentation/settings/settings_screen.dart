@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
 import '../theme/liquid_glass_theme.dart';
@@ -63,6 +64,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     } finally {
       if (mounted) setState(() => _checkingIn = false);
     }
+  }
+
+  Future<void> _openDailyCalendar() async {
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => _DailyCalendarSheet(
+        onCheckin: () async {
+          final res = await ref.read(hybridControllerProvider.notifier).dailyCheckin();
+          return res;
+        },
+        loadDaily: () => ref.read(hybridControllerProvider.notifier).getDailyInfo(),
+      ),
+    );
   }
 
   @override
@@ -182,7 +196,28 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(width: 10),
+                                  const SizedBox(width: 8),
+                                  LiquidSpringControl(
+                                    onTap: _openDailyCalendar,
+                                    child: Container(
+                                      height: 44,
+                                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                                      decoration: BoxDecoration(
+                                        color: LiquidTokens.elevated(context),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '签到日历',
+                                        style: TextStyle(
+                                          color: LiquidTokens.accentStrong(context),
+                                          fontSize: 13.5,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
                                   LiquidSpringControl(
                                     onTap: () => ctrl.logout(),
                                     child: Container(
@@ -376,6 +411,250 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DailyCalendarSheet extends StatefulWidget {
+  final Future<DailyCheckinInfo> Function() loadDaily;
+  final Future<CheckinResult> Function() onCheckin;
+
+  const _DailyCalendarSheet({required this.loadDaily, required this.onCheckin});
+
+  @override
+  State<_DailyCalendarSheet> createState() => _DailyCalendarSheetState();
+}
+
+class _DailyCalendarSheetState extends State<_DailyCalendarSheet> {
+  DailyCheckinInfo? _info;
+  bool _loading = true;
+  bool _busy = false;
+  String? _error;
+  String? _toast;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final info = await widget.loadDaily();
+      if (mounted) setState(() => _info = info);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e'.replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _doSign() async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _toast = null;
+    });
+    try {
+      final res = await widget.onCheckin();
+      if (mounted) {
+        setState(() => _toast = res.message);
+      }
+      await _fetch();
+    } catch (e) {
+      if (mounted) {
+        setState(() => _toast = '$e'.replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final info = _info;
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(LiquidTokens.radiusSheet)),
+      child: LiquidGlassSurface(
+        variant: LiquidGlassVariant.tinted,
+        borderRadius: LiquidTokens.radiusSheet,
+        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.separator(context),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    info?.eventName ?? '每日签到日历',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  ),
+                  CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(32, 32),
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('完成'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_loading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 28),
+                  child: Center(child: CupertinoActivityIndicator()),
+                )
+              else if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text('加载失败：$_error', style: const TextStyle(color: CupertinoColors.systemRed)),
+                )
+              else if (info != null) ...[
+                LiquidSolidCard(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '本月已打卡 ${info.streakDays} 天',
+                            style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
+                          ),
+                          if (info.progressText.isNotEmpty)
+                            Text(
+                              '进度 ${info.progressText}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: LiquidTokens.accentStrong(context),
+                              ),
+                            ),
+                        ],
+                      ),
+                      if (info.threeDaysCoin.isNotEmpty || info.sevenDaysCoin.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          [
+                            if (info.threeDaysCoin.isNotEmpty)
+                              '满3天 +${info.threeDaysCoin}金币/+${info.threeDaysExp}经验',
+                            if (info.sevenDaysCoin.isNotEmpty)
+                              '满7天 +${info.sevenDaysCoin}金币/+${info.sevenDaysExp}经验',
+                          ].join(' · '),
+                          style: TextStyle(fontSize: 11.5, color: LiquidTokens.muted(context)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 240),
+                  child: GridView.builder(
+                    shrinkWrap: true,
+                    itemCount: info.days.length,
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 7,
+                      mainAxisSpacing: 6,
+                      crossAxisSpacing: 6,
+                      childAspectRatio: 1,
+                    ),
+                    itemBuilder: (ctx, idx) {
+                      final d = info.days[idx];
+                      final isSigned = d.signed == true;
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: isSigned
+                              ? LiquidTokens.scene(ctx)
+                              : LiquidTokens.solid(ctx),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: d.bonus
+                                ? LiquidTokens.accentStrong(ctx)
+                                : LiquidTokens.separator(ctx),
+                            width: d.bonus ? 1.5 : 0.8,
+                          ),
+                        ),
+                        alignment: Alignment.center,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              d.label.isNotEmpty ? d.label : '${d.day}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isSigned ? CupertinoColors.white : LiquidTokens.ink(ctx),
+                              ),
+                            ),
+                            if (isSigned)
+                              const Icon(CupertinoIcons.check_mark, size: 10, color: CupertinoColors.white)
+                            else if (d.bonus)
+                              Text(
+                                '奖',
+                                style: TextStyle(fontSize: 9, color: LiquidTokens.accentStrong(ctx)),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (_toast != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _toast!,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 12.5, color: LiquidTokens.accentStrong(context)),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                LiquidSpringControl(
+                  onTap: (_busy || info.checkedInToday) ? null : _doSign,
+                  child: Container(
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: info.checkedInToday
+                          ? LiquidTokens.elevated(context)
+                          : LiquidTokens.scene(context),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      info.checkedInToday
+                          ? '今日已完成打卡'
+                          : (_busy ? '签到中...' : '立即打卡签到'),
+                      style: TextStyle(
+                        color: info.checkedInToday ? LiquidTokens.muted(context) : CupertinoColors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Sparkles, X } from 'lucide-react';
@@ -6,7 +6,8 @@ import { api } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
-import { SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { extractHotTags, resolveCategories, resolveSubCategories } from '../../utils/categories';
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -17,19 +18,54 @@ export function SearchPage() {
   const [input, setInput] = useState(initialQ);
   const [searchType, setSearchType] = useState(initialType);
   const [orderBy, setOrderBy] = useState(params.get('order') || 'mr');
-  const [timeRange] = useState(params.get('time') || 'a');
+  const [timeRange, setTimeRange] = useState(params.get('time') || 'a');
+  const [category, setCategory] = useState(params.get('cat') || '0');
+  const [subCategory, setSubCategory] = useState(params.get('sub') || '');
   const { recentSearches, quickTags, addRecentSearch, removeRecentSearch, clearRecentSearches } = useAppStore();
 
   useEffect(() => {
     setInput(params.get('q') || '');
     setSearchType(params.get('type') || 'all');
+    setOrderBy(params.get('order') || 'mr');
+    setTimeRange(params.get('time') || 'a');
+    setCategory(params.get('cat') || '0');
+    setSubCategory(params.get('sub') || '');
   }, [params]);
 
   const queryText = params.get('q') || '';
   const page = Number(params.get('page') || 1);
 
+  const categoriesMetaQuery = useQuery({
+    queryKey: ['categoriesMeta'],
+    queryFn: api.getCategoriesMeta,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const categories = useMemo(
+    () => resolveCategories(categoriesMetaQuery.data),
+    [categoriesMetaQuery.data]
+  );
+
+  const subCategories = useMemo(
+    () => resolveSubCategories(categoriesMetaQuery.data, category),
+    [categoriesMetaQuery.data, category]
+  );
+
+  const mergedHotTags = useMemo(() => {
+    const official = extractHotTags(categoriesMetaQuery.data, 16);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of [...official, ...quickTags]) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    return out;
+  }, [categoriesMetaQuery.data, quickTags]);
+
   const { data, isLoading, error } = useQuery({
-    queryKey: ['search', queryText, searchType, page, orderBy, timeRange],
+    queryKey: ['search', queryText, searchType, page, orderBy, timeRange, category, subCategory],
     queryFn: () =>
       api.search({
         q: queryText,
@@ -37,15 +73,31 @@ export function SearchPage() {
         page,
         order_by: orderBy,
         time: timeRange,
+        category,
+        sub_category: subCategory || undefined,
       }),
     enabled: !!queryText.trim(),
   });
+
+  const updateParams = (overrides: Record<string, string>) => {
+    const next: Record<string, string> = {
+      q: overrides.q ?? queryText,
+      type: overrides.type ?? searchType,
+      page: overrides.page ?? '1',
+      order: overrides.order ?? orderBy,
+      time: overrides.time ?? timeRange,
+      cat: overrides.cat ?? category,
+    };
+    const nextSub = overrides.sub ?? subCategory;
+    if (nextSub) next.sub = nextSub;
+    setParams(next);
+  };
 
   const submitSearch = (q: string, nextType = searchType) => {
     const clean = q.trim();
     if (!clean) return;
     addRecentSearch(clean);
-    setParams({ q: clean, type: nextType, page: '1', order: orderBy, time: timeRange });
+    updateParams({ q: clean, type: nextType, page: '1' });
   };
 
   return (
@@ -88,34 +140,119 @@ export function SearchPage() {
         </LiquidGlass>
       </form>
 
-      <LiquidGlass variant="tinted" radius={24} className="p-3.5 flex flex-wrap items-center gap-3">
-        <SegmentedControl
-          value={searchType}
-          onChange={(v) => {
-            setSearchType(v);
-            if (queryText) setParams({ q: queryText, type: v, page: '1', order: orderBy, time: timeRange });
-          }}
-          options={[
-            { value: 'all', label: '全部' },
-            { value: 'author', label: '作者' },
-            { value: 'tag', label: '标签' },
-            { value: 'work', label: '作品' },
-            { value: 'actor', label: '角色' },
-          ]}
-        />
-        <SegmentedControl
-          value={orderBy}
-          onChange={(v) => {
-            setOrderBy(v);
-            if (queryText) setParams({ q: queryText, type: searchType, page: '1', order: v, time: timeRange });
-          }}
-          options={[
-            { value: 'mr', label: '最新' },
-            { value: 'mv', label: '观看' },
-            { value: 'tf', label: '点赞' },
-            { value: 'mp', label: '页数' },
-          ]}
-        />
+      {/* L2 筛选层：类型 / 排序 / 时间 / 分类 / 条件子分类 */}
+      <LiquidGlass variant="tinted" radius={24} className="p-4 space-y-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SegmentedControl
+            value={searchType}
+            onChange={(v) => {
+              setSearchType(v);
+              if (queryText) updateParams({ type: v, page: '1' });
+            }}
+            options={[
+              { value: 'all', label: '全部' },
+              { value: 'author', label: '作者' },
+              { value: 'tag', label: '标签' },
+              { value: 'work', label: '作品' },
+              { value: 'actor', label: '角色' },
+            ]}
+          />
+          <SegmentedControl
+            value={orderBy}
+            onChange={(v) => {
+              setOrderBy(v);
+              if (queryText) updateParams({ order: v, page: '1' });
+            }}
+            options={[
+              { value: 'mr', label: '最新' },
+              { value: 'mv', label: '观看' },
+              { value: 'tf', label: '点赞' },
+              { value: 'mp', label: '页数' },
+              { value: 'tr', label: '评分' },
+              { value: 'md', label: '评论' },
+            ]}
+          />
+          <PillSelect
+            value={timeRange}
+            onChange={(v) => {
+              setTimeRange(v);
+              if (queryText) updateParams({ time: v, page: '1' });
+            }}
+            options={[
+              { value: 'a', label: '全部时间' },
+              { value: 't', label: '今天' },
+              { value: 'w', label: '本周' },
+              { value: 'm', label: '本月' },
+            ]}
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {categories.map((c) => {
+            const active = category === c.value;
+            return (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => {
+                  setCategory(c.value);
+                  setSubCategory('');
+                  if (queryText) updateParams({ cat: c.value, sub: '', page: '1' });
+                }}
+                className="min-h-[34px] px-3.5 py-1 rounded-full text-[12.5px] font-medium cursor-pointer shrink-0 liquid-tactile"
+                style={{
+                  backgroundColor: active ? 'var(--liquid-scene)' : 'var(--liquid-solid)',
+                  color: active ? '#ffffff' : 'var(--liquid-ink)',
+                  border: active ? '1px solid transparent' : '1px solid var(--liquid-separator)',
+                }}
+              >
+                {c.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {subCategories.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+            <span className="text-[11.5px] font-semibold pr-1 shrink-0" style={{ color: 'var(--liquid-muted)' }}>
+              子分类
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setSubCategory('');
+                if (queryText) updateParams({ sub: '', page: '1' });
+              }}
+              className="min-h-[30px] px-3 py-1 rounded-full text-[12px] font-medium cursor-pointer shrink-0"
+              style={{
+                backgroundColor: subCategory === '' ? 'var(--liquid-focus-soft)' : 'var(--liquid-fill-soft)',
+                color: subCategory === '' ? 'var(--liquid-accent)' : 'var(--liquid-muted)',
+              }}
+            >
+              全部
+            </button>
+            {subCategories.map((sc) => {
+              const active = subCategory === sc.slug;
+              return (
+                <button
+                  key={sc.slug}
+                  type="button"
+                  onClick={() => {
+                    setSubCategory(sc.slug);
+                    if (queryText) updateParams({ sub: sc.slug, page: '1' });
+                  }}
+                  className="min-h-[30px] px-3 py-1 rounded-full text-[12px] font-medium cursor-pointer shrink-0"
+                  style={{
+                    backgroundColor: active ? 'var(--liquid-focus-soft)' : 'var(--liquid-fill-soft)',
+                    color: active ? 'var(--liquid-accent)' : 'var(--liquid-muted)',
+                  }}
+                >
+                  {sc.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </LiquidGlass>
 
       {!queryText && (
@@ -165,7 +302,7 @@ export function SearchPage() {
               <h2 className="text-[16px] font-semibold">热门标签与搜索技巧</h2>
             </div>
             <div className="flex flex-wrap gap-2">
-              {quickTags.map((tag) => (
+              {mergedHotTags.map((tag) => (
                 <button
                   key={tag}
                   type="button"
@@ -208,9 +345,7 @@ export function SearchPage() {
               <button
                 type="button"
                 disabled={initialPage <= 1}
-                onClick={() =>
-                  setParams({ q: queryText, type: searchType, page: String(initialPage - 1), order: orderBy, time: timeRange })
-                }
+                onClick={() => updateParams({ page: String(initialPage - 1) })}
                 className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
                   backgroundColor: 'var(--liquid-solid)',
@@ -226,9 +361,7 @@ export function SearchPage() {
               <button
                 type="button"
                 disabled={initialPage >= data.page_count}
-                onClick={() =>
-                  setParams({ q: queryText, type: searchType, page: String(initialPage + 1), order: orderBy, time: timeRange })
-                }
+                onClick={() => updateParams({ page: String(initialPage + 1) })}
                 className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
                   backgroundColor: 'var(--liquid-solid)',

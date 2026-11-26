@@ -30,6 +30,9 @@ class LanServerSource implements ComicDataSource {
   @override
   bool get supportsPostingComments => true;
 
+  @override
+  bool get supportsWebOnlyFilters => true;
+
   Map<String, String> get _authHeaders =>
       panelToken.isNotEmpty ? {'X-Panel-Token': panelToken} : const {};
 
@@ -51,6 +54,40 @@ class LanServerSource implements ComicDataSource {
     );
   }
 
+  PagedComicsResult _parsePagedComics(Map<String, dynamic> d) {
+    final list = (d['albums'] as List?) ?? const [];
+    return PagedComicsResult(
+      albums: list.map((a) => _parseSummary(Map<String, dynamic>.from(a))).toList(),
+      total: parseJsonInt(d['total'], list.length),
+      pageCount: max(1, parseJsonInt(d['page_count'], 1)),
+    );
+  }
+
+  CommentItemModel _parseCommentItem(Map<String, dynamic> c) {
+    final rawReplies = (c['replies'] as List?) ?? const [];
+    return CommentItemModel(
+      cid: '${c['cid'] ?? ''}',
+      albumId: '${c['album_id'] ?? ''}',
+      username: '${c['username'] ?? ''}',
+      levelName: '${c['level_name'] ?? ''}',
+      content: cleanCommentHtml('${c['content'] ?? ''}'),
+      likes: '${c['likes'] ?? '0'}',
+      addtime: '${c['addtime'] ?? ''}',
+      spoiler: c['spoiler'] == true,
+      replies: rawReplies
+          .map((r) {
+            final rep = Map<String, dynamic>.from(r);
+            return CommentReplyModel(
+              cid: '${rep['cid'] ?? ''}',
+              username: '${rep['username'] ?? ''}',
+              content: cleanCommentHtml('${rep['content'] ?? ''}'),
+              addtime: '${rep['addtime'] ?? ''}',
+            );
+          })
+          .toList(),
+    );
+  }
+
   @override
   Future<List<({String title, List<ComicSummary> albums})>> getPromoteSections() async {
     final resp = await _dio.get('/api/v2/discovery/promote');
@@ -64,23 +101,150 @@ class LanServerSource implements ComicDataSource {
   }
 
   @override
-  Future<List<ComicSummary>> getRanking(String type, {int page = 1, String category = '0'}) async {
+  Future<List<ComicSummary>> getLatest({int page = 1}) async {
+    final resp = await _dio.get('/api/v2/discovery/latest', queryParameters: {'page': page});
+    final list = (resp.data['data']['albums'] as List?) ?? const [];
+    return list.map((a) => _parseSummary(Map<String, dynamic>.from(a))).toList();
+  }
+
+  @override
+  Future<CategoryMetaResult> getCategoriesMeta() async {
+    final resp = await _dio.get('/api/v2/discovery/categories');
+    final d = Map<String, dynamic>.from(resp.data['data'] ?? const {});
+    final catMap = <String, String>{
+      for (final c in CategoryMetaResult.fallbackCategories) c.value: c.label,
+    };
+    for (final raw in (d['categories'] as List?) ?? const []) {
+      if (raw is! Map) continue;
+      final m = Map<String, dynamic>.from(raw);
+      final val = '${m['slug'] ?? ''}'.trim().isNotEmpty ? '${m['slug']}'.trim() : '${m['id'] ?? ''}'.trim();
+      final label = '${m['name'] ?? m['title'] ?? ''}'.trim();
+      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val)) {
+        catMap[val] = label;
+      }
+    }
+    final hotTags = <String>[];
+    final seenTags = <String>{};
+    for (final b in (d['blocks'] as List?) ?? const []) {
+      if (b is! Map) continue;
+      for (final entry in (b['content'] as List?) ?? const []) {
+        final t = entry is Map ? '${entry['name'] ?? entry['title'] ?? ''}'.trim() : '$entry'.trim();
+        if (t.isNotEmpty && seenTags.add(t)) {
+          hotTags.add(t);
+        }
+      }
+    }
+    final subMap = <String, List<SubCategoryOptionItem>>{...CategoryMetaResult.fallbackSubCategories};
+    final rawSub = d['sub_categories'];
+    if (rawSub is Map) {
+      rawSub.forEach((k, v) {
+        if (v is List) {
+          subMap['$k'] = v
+              .whereType<Map>()
+              .map((sc) => SubCategoryOptionItem(slug: '${sc['slug'] ?? ''}', name: '${sc['name'] ?? ''}'))
+              .where((sc) => sc.slug.isNotEmpty)
+              .toList();
+        }
+      });
+    }
+    return CategoryMetaResult(
+      categories: catMap.entries.map((e) => CategoryOptionItem(value: e.key, label: e.value)).toList(),
+      hotTags: hotTags,
+      subCategories: subMap,
+    );
+  }
+
+  @override
+  Future<WeekMetaResult> getWeekMeta() async {
+    final resp = await _dio.get('/api/v2/discovery/week');
+    final d = Map<String, dynamic>.from(resp.data['data'] ?? const {});
+    final cats = ((d['categories'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((c) => WeekCategoryOption(
+              id: '${c['id'] ?? ''}',
+              title: '${c['title'] ?? c['time'] ?? ''}',
+              time: '${c['time'] ?? ''}',
+            ))
+        .where((c) => c.id.isNotEmpty)
+        .toList();
+    final types = ((d['types'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((t) => WeekTypeOption(id: '${t['id'] ?? ''}', title: '${t['title'] ?? ''}'))
+        .where((t) => t.id.isNotEmpty)
+        .toList();
+    return WeekMetaResult(categories: cats, types: types);
+  }
+
+  @override
+  Future<List<ComicSummary>> getWeekFilter(String categoryId, {String typeId = 'manga'}) async {
     final resp = await _dio.get(
-      '/api/v2/discovery/ranking/$type',
-      queryParameters: {'page': page, 'category': category},
+      '/api/v2/discovery/week/filter',
+      queryParameters: {'category_id': categoryId, 'type_id': typeId},
     );
     final list = (resp.data['data']['albums'] as List?) ?? const [];
     return list.map((a) => _parseSummary(Map<String, dynamic>.from(a))).toList();
   }
 
   @override
-  Future<List<ComicSummary>> search(String query, {String type = 'all', int page = 1}) async {
+  Future<PagedComicsResult> getRanking(String type, {int page = 1, String category = '0'}) async {
+    final resp = await _dio.get(
+      '/api/v2/discovery/ranking/$type',
+      queryParameters: {'page': page, 'category': category},
+    );
+    return _parsePagedComics(Map<String, dynamic>.from(resp.data['data'] ?? const {}));
+  }
+
+  @override
+  Future<PagedComicsResult> getCategoryFilter({
+    int page = 1,
+    String time = 'a',
+    String orderBy = 'mv',
+    String category = '0',
+    String? subCategory,
+  }) async {
+    final resp = await _dio.get(
+      '/api/v2/discovery/filter',
+      queryParameters: {
+        'page': page,
+        'time': time,
+        'order_by': orderBy,
+        'category': category,
+        if (subCategory != null && subCategory.isNotEmpty) 'sub_category': subCategory,
+      },
+    );
+    return _parsePagedComics(Map<String, dynamic>.from(resp.data['data'] ?? const {}));
+  }
+
+  @override
+  Future<PagedComicsResult> search(
+    String query, {
+    String type = 'all',
+    int page = 1,
+    String orderBy = 'mr',
+    String time = 'a',
+    String category = '0',
+    String? subCategory,
+  }) async {
     final resp = await _dio.get(
       '/api/v2/search',
-      queryParameters: {'q': query, 'type': type, 'page': page},
+      queryParameters: {
+        'q': query,
+        'type': type,
+        'page': page,
+        'order_by': orderBy,
+        'time': time,
+        'category': category,
+        if (subCategory != null && subCategory.isNotEmpty) 'sub_category': subCategory,
+      },
     );
-    final list = (resp.data['data']['albums'] as List?) ?? const [];
-    return list.map((a) => _parseSummary(Map<String, dynamic>.from(a))).toList();
+    return _parsePagedComics(Map<String, dynamic>.from(resp.data['data'] ?? const {}));
+  }
+
+  @override
+  Future<List<CommentItemModel>> getForumComments({int page = 1}) async {
+    final resp = await _dio.get('/api/v2/discovery/forum', queryParameters: {'page': page});
+    final list = (resp.data['data']['comments'] as List?) ?? const [];
+    return list.map((raw) => _parseCommentItem(Map<String, dynamic>.from(raw))).toList();
   }
 
   @override
@@ -91,11 +255,15 @@ class LanServerSource implements ComicDataSource {
       albumId: '${d['album_id']}',
       title: '${d['title'] ?? ''}',
       authors: (d['authors'] as List?)?.map((e) => '$e').toList() ?? const [],
+      works: (d['works'] as List?)?.map((e) => '$e').toList() ?? const [],
+      actors: (d['actors'] as List?)?.map((e) => '$e').toList() ?? const [],
       tags: (d['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
       description: cleanCommentHtml('${d['description'] ?? ''}'),
       views: '${d['views'] ?? '0'}',
       likes: '${d['likes'] ?? '0'}',
       commentCount: parseJsonInt(d['comment_count']),
+      pubDate: '${d['pub_date'] ?? ''}',
+      updateDate: '${d['update_date'] ?? ''}',
       coverUrl: _absUrl('${d['cover_url']}'),
       episodes: ((d['episodes'] as List?) ?? const [])
           .map(
@@ -110,6 +278,7 @@ class LanServerSource implements ComicDataSource {
           .map((r) => _parseSummary(Map<String, dynamic>.from(r)))
           .toList(),
       isFavorite: d['is_favorite'] == true,
+      liked: d['liked'] == true,
     );
   }
 
@@ -132,30 +301,7 @@ class LanServerSource implements ComicDataSource {
   Future<List<CommentItemModel>> getComments(String albumId, {int page = 1}) async {
     final resp = await _dio.get('/api/v2/album/$albumId/comments', queryParameters: {'page': page});
     final list = (resp.data['data']['comments'] as List?) ?? const [];
-    return list.map((raw) {
-      final c = Map<String, dynamic>.from(raw);
-      final rawReplies = (c['replies'] as List?) ?? const [];
-      return CommentItemModel(
-        cid: '${c['cid'] ?? ''}',
-        username: '${c['username'] ?? ''}',
-        levelName: '${c['level_name'] ?? ''}',
-        content: cleanCommentHtml('${c['content'] ?? ''}'),
-        likes: '${c['likes'] ?? '0'}',
-        addtime: '${c['addtime'] ?? ''}',
-        spoiler: c['spoiler'] == true,
-        replies: rawReplies
-            .map((r) {
-              final rep = Map<String, dynamic>.from(r);
-              return CommentReplyModel(
-                cid: '${rep['cid'] ?? ''}',
-                username: '${rep['username'] ?? ''}',
-                content: cleanCommentHtml('${rep['content'] ?? ''}'),
-                addtime: '${rep['addtime'] ?? ''}',
-              );
-            })
-            .toList(),
-      );
-    }).toList();
+    return list.map((raw) => _parseCommentItem(Map<String, dynamic>.from(raw))).toList();
   }
 
   @override
@@ -253,6 +399,12 @@ class LanServerSource implements ComicDataSource {
   @override
   Future<void> removeFavorite(String albumId) async {
     await _dio.delete('/api/v2/user/favorites/$albumId');
+  }
+
+  @override
+  Future<DailyCheckinInfo> getDailyInfo() async {
+    final resp = await _dio.get('/api/v2/user/daily');
+    return DailyCheckinInfo.fromJson(Map<String, dynamic>.from(resp.data['data'] ?? const {}));
   }
 
   @override

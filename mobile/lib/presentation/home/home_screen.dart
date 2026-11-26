@@ -7,6 +7,7 @@ import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
 import '../detail/album_detail_screen.dart';
+import '../explore/explore_screen.dart';
 import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
 import '../widgets/liquid_glass.dart';
@@ -22,6 +23,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<({String title, List<ComicSummary> albums})> _sections = const [];
+  List<ComicSummary> _latestAlbums = const [];
+  List<String> _hotTags = const [];
   bool _loading = true;
   String? _error;
 
@@ -38,10 +41,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     });
     try {
       final src = ref.read(hybridControllerProvider.notifier).activeSource;
-      final data = await src.getPromoteSections();
+      final promoteFuture = src.getPromoteSections();
+      final latestFuture = src.getLatest().catchError((_) => const <ComicSummary>[]);
+      final metaFuture = src.getCategoriesMeta().catchError((_) => const CategoryMetaResult());
+      final results = await Future.wait([promoteFuture, latestFuture, metaFuture]);
       if (mounted) {
         setState(() {
-          _sections = data;
+          _sections = results[0] as List<({String title, List<ComicSummary> albums})>;
+          _latestAlbums = results[1] as List<ComicSummary>;
+          _hotTags = (results[2] as CategoryMetaResult).hotTags;
           _loading = false;
         });
       }
@@ -261,6 +269,50 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             ),
                           ),
+                          if (_hotTags.isNotEmpty) ...[
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              height: 32,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: _hotTags.take(12).length,
+                                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                itemBuilder: (ctx, i) {
+                                  final tag = _hotTags[i];
+                                  return LiquidSpringControl(
+                                    onTap: () => Navigator.of(context).push(
+                                      CupertinoPageRoute(
+                                        builder: (_) => ExploreScreen(
+                                          initialQuery: tag,
+                                          initialSearchType: 'tag',
+                                        ),
+                                      ),
+                                    ),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                      decoration: BoxDecoration(
+                                        color: CupertinoColors.white.withValues(alpha: 0.14),
+                                        borderRadius: BorderRadius.circular(999),
+                                        border: Border.all(
+                                          color: CupertinoColors.white.withValues(alpha: 0.24),
+                                          width: 0.7,
+                                        ),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: Text(
+                                        '#$tag',
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                          color: CupertinoColors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -440,6 +492,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     },
                     childCount: sec.albums.length,
+                  ),
+                ),
+              ),
+            ],
+          if (!_loading && _error == null && _latestAlbums.isNotEmpty) ...[
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '最新更新',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.3,
+                          color: LiquidTokens.ink(context),
+                        ),
+                      ),
+                      Text(
+                        '${_latestAlbums.length} 部',
+                        style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverGrid(
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossCount,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.60,
+                  ),
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, idx) {
+                      final album = _latestAlbums[idx];
+                      return ModernComicCard(
+                        album: album,
+                        onTap: () => Navigator.of(context).push(
+                          CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
+                        ),
+                      );
+                    },
+                    childCount: _latestAlbums.length,
                   ),
                 ),
               ),

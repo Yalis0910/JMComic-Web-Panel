@@ -6,116 +6,22 @@ import {
   ArrowUpDown,
   BookOpen,
   Download,
-  Eye,
+  FolderHeart,
   Heart,
   LayoutGrid,
   List,
   MessageCircle,
   Send,
-  ThumbsUp,
+  X,
 } from 'lucide-react';
 import { api, type CommentItem, type DownloadTask } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { BottomSheet, InsetGroup, InsetRow } from '../../components/liquid/LiquidControls';
 import { ComicCard } from '../../components/liquid/ComicCard';
+import { CommentCard } from '../../components/liquid/CommentCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
 import { cleanHtmlText } from '../../utils/text';
-
-const AVATAR_PALETTES = [
-  '#25414A',
-  '#355B63',
-  '#557B79',
-  '#3E6B66',
-  '#4A5E6D',
-];
-
-function avatarBg(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) | 0;
-  return AVATAR_PALETTES[Math.abs(hash) % AVATAR_PALETTES.length];
-}
-
-function CommentCard({ item }: { item: CommentItem }) {
-  const [revealed, setRevealed] = useState(false);
-  const cleanContent = cleanHtmlText(item.content);
-  const name = item.username || '匿名读者';
-
-  return (
-    <div className="liquid-solid-card p-5 space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[12px] font-semibold text-white shrink-0"
-            style={{ backgroundColor: avatarBg(name) }}
-          >
-            {name.slice(0, 1).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[13.5px] font-semibold truncate">{name}</span>
-              {item.level_name && (
-                <span
-                  className="px-2 py-0.5 rounded-full text-[10.5px] font-medium"
-                  style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
-                >
-                  {item.level_name}
-                </span>
-              )}
-            </div>
-            <div className="text-[11px]" style={{ color: 'var(--liquid-subtle)' }}>
-              {item.addtime}
-            </div>
-          </div>
-        </div>
-
-        {Number(item.likes || 0) > 0 && (
-          <span
-            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11.5px] tabular-nums shrink-0"
-            style={{ backgroundColor: 'var(--liquid-fill-soft)', color: 'var(--liquid-muted)' }}
-          >
-            <ThumbsUp className="w-3 h-3" /> {item.likes}
-          </span>
-        )}
-      </div>
-
-      {item.spoiler && !revealed ? (
-        <button
-          type="button"
-          onClick={() => setRevealed(true)}
-          className="w-full py-2.5 px-3 rounded-[14px] text-[12.5px] font-medium flex items-center justify-center gap-1.5 cursor-pointer"
-          style={{
-            backgroundColor: 'var(--liquid-fill-soft)',
-            color: 'var(--liquid-muted)',
-            border: '1px dashed var(--liquid-separator)',
-          }}
-        >
-          <Eye className="w-3.5 h-3.5" /> 包含剧透内容，点击显示
-        </button>
-      ) : (
-        <p className="text-[14px] whitespace-pre-wrap leading-relaxed break-words">
-          {cleanContent || '（空评论）'}
-        </p>
-      )}
-
-      {item.replies.length > 0 && (
-        <div
-          className="mt-2 rounded-[14px] p-3.5 space-y-2"
-          style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
-        >
-          {item.replies.map((rep) => (
-            <div key={rep.cid} className="text-[12.5px] leading-relaxed break-words">
-              <span className="font-semibold" style={{ color: 'var(--liquid-accent)' }}>
-                {rep.username || '匿名'}：
-              </span>
-              <span style={{ color: 'var(--liquid-ink)' }}>{cleanHtmlText(rep.content)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 export function AlbumDetailPage() {
   const { id = '' } = useParams();
@@ -124,9 +30,11 @@ export function AlbumDetailPage() {
   const { showToast, showCovers } = useAppStore();
 
   const [dlSheetOpen, setDlSheetOpen] = useState(false);
+  const [favSheetOpen, setFavSheetOpen] = useState(false);
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentPage, setCommentPage] = useState(1);
   const [commentText, setCommentText] = useState('');
+  const [replyTarget, setReplyTarget] = useState<CommentItem | null>(null);
   const [spoiler, setSpoiler] = useState(false);
   const [epLayout, setEpLayout] = useState<'grid' | 'list'>('grid');
   const [epReverse, setEpReverse] = useState(false);
@@ -135,6 +43,18 @@ export function AlbumDetailPage() {
     queryKey: ['album', id],
     queryFn: () => api.getAlbum(id),
     enabled: !!id,
+  });
+
+  const { data: userStatus } = useQuery({
+    queryKey: ['userStatus'],
+    queryFn: api.getUserStatus,
+  });
+
+  const { data: favFoldersMeta } = useQuery({
+    queryKey: ['favoritesFolders'],
+    queryFn: () => api.getFavorites(1, '0', 'mr'),
+    enabled: !!userStatus?.is_logged_in,
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: history = [] } = useQuery({
@@ -149,9 +69,11 @@ export function AlbumDetailPage() {
   });
 
   const favMutation = useMutation({
-    mutationFn: (isFav: boolean) => (isFav ? api.removeFavorite(id) : api.addFavorite(id)),
-    onSuccess: (_, wasFav) => {
-      showToast(wasFav ? '已取消收藏' : '已加入收藏', 'success');
+    mutationFn: ({ isFav, folderId = '0' }: { isFav: boolean; folderId?: string }) =>
+      isFav ? api.removeFavorite(id) : api.addFavorite(id, folderId),
+    onSuccess: (_, vars) => {
+      setFavSheetOpen(false);
+      showToast(vars.isFav ? '已取消收藏' : '已加入收藏', 'success');
       queryClient.invalidateQueries({ queryKey: ['album', id] });
       queryClient.invalidateQueries({ queryKey: ['favorites'] });
     },
@@ -169,9 +91,10 @@ export function AlbumDetailPage() {
   });
 
   const commentMutation = useMutation({
-    mutationFn: () => api.postComment(id, commentText.trim(), undefined, spoiler),
+    mutationFn: () => api.postComment(id, commentText.trim(), replyTarget?.cid, spoiler),
     onSuccess: () => {
       setCommentText('');
+      setReplyTarget(null);
       showToast('评论已发布', 'success');
       queryClient.invalidateQueries({ queryKey: ['comments', id] });
     },
@@ -274,6 +197,7 @@ export function AlbumDetailPage() {
                   <span>{album.views} 阅读</span>
                   <span>· {album.likes} 喜欢</span>
                   <span>· {album.page_count || '?'} 页</span>
+                  {album.pub_date && String(album.pub_date) !== '0' && <span>· 发布 {album.pub_date}</span>}
                   {album.update_date && String(album.update_date) !== '0' && <span>· 更新 {album.update_date}</span>}
                 </div>
 
@@ -290,7 +214,7 @@ export function AlbumDetailPage() {
                 <div className="flex flex-wrap gap-1.5 pt-1">
                   {album.authors.map((a) => (
                     <button
-                      key={a}
+                      key={`author-${a}`}
                       type="button"
                       onClick={() => navigate(`/search?q=${encodeURIComponent(a)}&type=author`)}
                       className="min-h-[32px] px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer liquid-tactile"
@@ -299,9 +223,31 @@ export function AlbumDetailPage() {
                       作者: {a}
                     </button>
                   ))}
+                  {(album.works || []).map((w) => (
+                    <button
+                      key={`work-${w}`}
+                      type="button"
+                      onClick={() => navigate(`/search?q=${encodeURIComponent(w)}&type=work`)}
+                      className="min-h-[32px] px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer liquid-tactile"
+                      style={{ backgroundColor: 'rgba(147, 197, 253, 0.20)', color: '#E0F2FE' }}
+                    >
+                      原作: {w}
+                    </button>
+                  ))}
+                  {(album.actors || []).map((act) => (
+                    <button
+                      key={`actor-${act}`}
+                      type="button"
+                      onClick={() => navigate(`/search?q=${encodeURIComponent(act)}&type=actor`)}
+                      className="min-h-[32px] px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer liquid-tactile"
+                      style={{ backgroundColor: 'rgba(244, 162, 166, 0.20)', color: '#FCE7F3' }}
+                    >
+                      角色: {act}
+                    </button>
+                  ))}
                   {album.tags.map((t) => (
                     <button
-                      key={t}
+                      key={`tag-${t}`}
                       type="button"
                       onClick={() => navigate(`/search?q=${encodeURIComponent(t)}&type=tag`)}
                       className="min-h-[32px] px-3 py-1 rounded-full text-[12px] text-white/85 cursor-pointer liquid-tactile"
@@ -355,7 +301,14 @@ export function AlbumDetailPage() {
                 <LiquidGlass variant="clear" tone="dark" radius={999} interactive>
                   <button
                     type="button"
-                    onClick={() => favMutation.mutate(album.is_favorite)}
+                    onClick={() => {
+                      const folders = favFoldersMeta?.folders || [];
+                      if (!album.is_favorite && folders.length > 0) {
+                        setFavSheetOpen(true);
+                      } else {
+                        favMutation.mutate({ isFav: album.is_favorite });
+                      }
+                    }}
                     className="min-h-[46px] inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-[14px] font-medium text-white cursor-pointer liquid-focus-ring"
                   >
                     <Heart
@@ -492,7 +445,14 @@ export function AlbumDetailPage() {
         ) : (commentsData?.comments?.length || 0) > 0 ? (
           <div className="grid gap-4 md:grid-cols-2">
             {commentsData!.comments.slice(0, 6).map((c) => (
-              <CommentCard key={c.cid} item={c} />
+              <CommentCard
+                key={c.cid}
+                item={c}
+                onReply={(target) => {
+                  setReplyTarget(target);
+                  setCommentOpen(true);
+                }}
+              />
             ))}
           </div>
         ) : (
@@ -536,6 +496,29 @@ export function AlbumDetailPage() {
         </InsetGroup>
       </BottomSheet>
 
+      {/* 选夹收藏 Sheet */}
+      <BottomSheet open={favSheetOpen} onClose={() => setFavSheetOpen(false)} title="选择收藏夹">
+        <InsetGroup>
+          <InsetRow
+            label="默认收藏夹"
+            sublabel="不指定分类直接收藏"
+            icon={<FolderHeart className="w-4 h-4" />}
+            isLast={(favFoldersMeta?.folders?.length || 0) === 0}
+            onClick={() => favMutation.mutate({ isFav: false, folderId: '0' })}
+          />
+          {(favFoldersMeta?.folders || []).map((f, idx, arr) => (
+            <InsetRow
+              key={f.folder_id}
+              label={f.name}
+              sublabel={`收藏夹 #${f.folder_id}`}
+              icon={<FolderHeart className="w-4 h-4" />}
+              isLast={idx === arr.length - 1}
+              onClick={() => favMutation.mutate({ isFav: false, folderId: f.folder_id })}
+            />
+          ))}
+        </InsetGroup>
+      </BottomSheet>
+
       {/* 完整评论区 Sheet */}
       <BottomSheet open={commentOpen} onClose={() => setCommentOpen(false)} title={`评论 (${album.comment_count})`}>
         <div className="space-y-4">
@@ -546,11 +529,29 @@ export function AlbumDetailPage() {
             }}
             className="flex flex-col gap-2.5"
           >
+            {replyTarget && (
+              <div
+                className="flex items-center justify-between gap-2 px-3.5 py-1.5 rounded-full text-[12.5px]"
+                style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+              >
+                <span className="truncate font-medium">
+                  正在回复 @{replyTarget.username || '匿名读者'}：{cleanHtmlText(replyTarget.content).slice(0, 28)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setReplyTarget(null)}
+                  className="shrink-0 cursor-pointer opacity-80 hover:opacity-100"
+                  aria-label="取消回复"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <textarea
               rows={2}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              placeholder="写下你的评论（需登录 JM 账号）..."
+              placeholder={replyTarget ? `回复 @${replyTarget.username || '匿名读者'}...` : '写下你的评论（需登录 JM 账号）...'}
               className="w-full rounded-[16px] p-3.5 text-[14px] outline-none resize-none liquid-focus-ring"
               style={{
                 backgroundColor: 'var(--liquid-solid)',
@@ -568,7 +569,7 @@ export function AlbumDetailPage() {
                 className="min-h-[38px] inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[13.5px] font-semibold text-white cursor-pointer disabled:opacity-50 liquid-tactile"
                 style={{ backgroundColor: 'var(--liquid-scene)' }}
               >
-                <Send className="w-3.5 h-3.5" /> 发送
+                <Send className="w-3.5 h-3.5" /> {replyTarget ? '发送回复' : '发送'}
               </button>
             </div>
           </form>
@@ -580,7 +581,7 @@ export function AlbumDetailPage() {
           ) : (
             <div className="space-y-3">
               {(commentsData?.comments || []).map((c) => (
-                <CommentCard key={c.cid} item={c} />
+                <CommentCard key={c.cid} item={c} onReply={setReplyTarget} />
               ))}
               {commentsData && commentsData.comments.length === 0 && (
                 <div className="py-8 text-center text-[13px]" style={{ color: 'var(--liquid-muted)' }}>

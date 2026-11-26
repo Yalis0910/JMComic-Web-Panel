@@ -27,6 +27,7 @@ export interface AlbumDetail extends AlbumSummary {
   episodes: AlbumEpisode[];
   related: AlbumSummary[];
   is_favorite: boolean;
+  liked?: boolean;
 }
 
 export interface PhotoImage {
@@ -57,6 +58,7 @@ export interface CommentReply {
 
 export interface CommentItem {
   cid: string;
+  album_id?: string;
   username: string;
   level?: number | null;
   level_name?: string;
@@ -65,6 +67,34 @@ export interface CommentItem {
   addtime: string;
   spoiler: boolean;
   replies: CommentReply[];
+}
+
+export interface CategoriesMeta {
+  categories: Array<Record<string, unknown>>;
+  blocks: Array<{ title?: string; content?: unknown[] }>;
+  sub_categories?: Record<string, { slug: string; name: string }[]>;
+}
+
+export interface DailyDayCell {
+  day: number;
+  label: string;
+  signed: boolean | null;
+  bonus: boolean;
+}
+
+export interface DailyCheckinInfo {
+  daily_id: string;
+  event_name: string;
+  progress_text: string;
+  streak_days: number;
+  checked_in_today: boolean;
+  rewards: {
+    three_days_coin: string;
+    three_days_exp: string;
+    seven_days_coin: string;
+    seven_days_exp: string;
+  };
+  days: DailyDayCell[];
 }
 
 export interface PageResult {
@@ -186,9 +216,11 @@ export const api = {
 
   getPromote: (page = 1) => request<{ sections: { id: string; title: string; slug: string; type: string; albums: AlbumSummary[] }[] }>(`/discovery/promote?page=${page}`),
   getLatest: (page = 1) => request<{ albums: AlbumSummary[]; page: number }>(`/discovery/latest?page=${page}`),
+  getCategoriesMeta: () => request<CategoriesMeta>('/discovery/categories'),
   getWeekMeta: () => request<{ categories: { id: string; title: string; time?: string }[]; types: { id: string; title: string }[] }>('/discovery/week'),
   getWeekFilter: (categoryId: string, typeId = 'manga') => request<{ albums: AlbumSummary[]; total: number }>(`/discovery/week/filter?category_id=${encodeURIComponent(categoryId)}&type_id=${encodeURIComponent(typeId)}`),
-  getRanking: (type: 'day' | 'week' | 'month', page = 1, category = '0') => request<PageResult>(`/discovery/ranking/${type}?page=${page}&category=${encodeURIComponent(category)}`),
+  getRanking: (type: 'day' | 'week' | 'month' | 'all' | 'likes' | 'latest', page = 1, category = '0') => request<PageResult>(`/discovery/ranking/${type}?page=${page}&category=${encodeURIComponent(category)}`),
+  getForum: (page = 1) => request<{ comments: CommentItem[]; total: number; page: number; page_count: number }>(`/discovery/forum?page=${page}`),
   getCategoryFilter: (params: { page?: number; time?: string; order_by?: string; category?: string; sub_category?: string }) => {
     const qs = new URLSearchParams({
       page: String(params.page ?? 1),
@@ -228,6 +260,7 @@ export const api = {
   addFavorite: (albumId: string, folderId = '0') =>
     request(`/user/favorites/${albumId}`, { method: 'POST', body: JSON.stringify({ folder_id: folderId }) }),
   removeFavorite: (albumId: string) => request(`/user/favorites/${albumId}`, { method: 'DELETE' }),
+  getDailyInfo: () => request<DailyCheckinInfo>('/user/daily'),
   dailyCheckin: () => request<{ code: number; msg: string; already_checked_in: boolean }>('/user/checkin', { method: 'POST' }),
 
   listDownloads: () => request<DownloadTask[]>('/download/tasks'),

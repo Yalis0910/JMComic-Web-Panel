@@ -76,7 +76,40 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         await src.removeFavorite(widget.albumId);
         if (mounted) setState(() => _isFavorite = false);
       } else {
-        await src.addFavorite(widget.albumId);
+        var folderId = '0';
+        if (src.supportsWebOnlyFilters) {
+          final favPage = await src.getFavorites(page: 1).catchError((_) => const FavoritePageResult());
+          if (favPage.folders.isNotEmpty && mounted) {
+            final chosen = await showCupertinoModalPopup<String>(
+              context: context,
+              builder: (ctx) => CupertinoActionSheet(
+                title: const Text('选择收藏夹'),
+                actions: [
+                  CupertinoActionSheetAction(
+                    onPressed: () => Navigator.pop(ctx, '0'),
+                    child: const Text('默认收藏夹'),
+                  ),
+                  for (final f in favPage.folders)
+                    CupertinoActionSheetAction(
+                      onPressed: () => Navigator.pop(ctx, f.folderId),
+                      child: Text(f.name),
+                    ),
+                ],
+                cancelButton: CupertinoActionSheetAction(
+                  isDestructiveAction: true,
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('取消'),
+                ),
+              ),
+            );
+            if (chosen == null) {
+              if (mounted) setState(() => _favBusy = false);
+              return;
+            }
+            folderId = chosen;
+          }
+        }
+        await src.addFavorite(widget.albumId, folderId: folderId);
         if (mounted) setState(() => _isFavorite = true);
       }
     } catch (e) {
@@ -120,14 +153,14 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     }
   }
 
-  Future<void> _openPostComment() async {
+  Future<void> _openPostComment({CommentItemModel? replyTo}) async {
     final src = ref.read(hybridControllerProvider.notifier).activeSource;
     if (!src.supportsPostingComments) {
       showCupertinoDialog(
         context: context,
         builder: (ctx) => CupertinoAlertDialog(
           title: const Text('暂不支持直连发表评论'),
-          content: const Text('当前处于直连模式，仅支持浏览评论。如需发表评论请切换至局域网服务端模式。'),
+          content: const Text('当前处于直连模式，仅支持浏览评论。如需发表评论或回复请切换至局域网服务端模式。'),
           actions: [CupertinoDialogAction(child: const Text('知道了'), onPressed: () => Navigator.pop(ctx))],
         ),
       );
@@ -135,31 +168,55 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     }
 
     final ctrl = TextEditingController();
+    var spoiler = false;
     final sent = await showCupertinoDialog<bool>(
       context: context,
-      builder: (ctx) => CupertinoAlertDialog(
-        title: const Text('发表评论'),
-        content: Padding(
-          padding: const EdgeInsets.only(top: 10),
-          child: CupertinoTextField(
-            controller: ctrl,
-            placeholder: '写下你的评论（需服务端已登录 JM 账号）',
-            maxLines: 3,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => CupertinoAlertDialog(
+          title: Text(replyTo != null ? '回复 @${replyTo.username.isEmpty ? "匿名读者" : replyTo.username}' : '发表评论'),
+          content: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CupertinoTextField(
+                  controller: ctrl,
+                  placeholder: '写下你的评论（需服务端已登录 JM 账号）',
+                  maxLines: 3,
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('包含剧透', style: TextStyle(fontSize: 13)),
+                    CupertinoSwitch(
+                      value: spoiler,
+                      onChanged: (v) => setDialogState(() => spoiler = v),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
+          actions: [
+            CupertinoDialogAction(child: const Text('取消'), onPressed: () => Navigator.pop(ctx, false)),
+            CupertinoDialogAction(
+              isDefaultAction: true,
+              child: const Text('发送'),
+              onPressed: () async {
+                final txt = ctrl.text.trim();
+                if (txt.isEmpty) return;
+                await src.postComment(
+                  widget.albumId,
+                  txt,
+                  commentId: replyTo?.cid,
+                  spoiler: spoiler,
+                );
+                if (ctx.mounted) Navigator.pop(ctx, true);
+              },
+            ),
+          ],
         ),
-        actions: [
-          CupertinoDialogAction(child: const Text('取消'), onPressed: () => Navigator.pop(ctx, false)),
-          CupertinoDialogAction(
-            isDefaultAction: true,
-            child: const Text('发送'),
-            onPressed: () async {
-              final txt = ctrl.text.trim();
-              if (txt.isEmpty) return;
-              await src.postComment(widget.albumId, txt);
-              if (ctx.mounted) Navigator.pop(ctx, true);
-            },
-          ),
-        ],
       ),
     );
     ctrl.dispose();
@@ -332,49 +389,110 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                               ),
                                               const SizedBox(height: 6),
                                               Text(
-                                                '${d.views} 阅读 · ${d.likes} 喜欢',
+                                                [
+                                                  '${d.views} 阅读',
+                                                  '${d.likes} 喜欢',
+                                                  if (d.pubDate.isNotEmpty && d.pubDate != '0') '发布 ${d.pubDate}',
+                                                ].join(' · '),
                                                 style: TextStyle(
                                                   fontSize: 12,
                                                   color: CupertinoColors.white.withValues(alpha: 0.78),
                                                 ),
                                               ),
-                                              if (d.authors.isNotEmpty) ...[
+                                              if (d.authors.isNotEmpty || d.works.isNotEmpty || d.actors.isNotEmpty) ...[
                                                 const SizedBox(height: 10),
                                                 Wrap(
                                                   spacing: 6,
                                                   runSpacing: 6,
-                                                  children: d.authors
-                                                      .map(
-                                                        (a) => GestureDetector(
-                                                          onTap: () => Navigator.of(context).push(
-                                                            CupertinoPageRoute(
-                                                              builder: (_) => ExploreScreen(
-                                                                initialQuery: a,
-                                                                initialSearchType: 'author',
-                                                              ),
-                                                            ),
-                                                          ),
-                                                          child: Container(
-                                                            padding: const EdgeInsets.symmetric(
-                                                              horizontal: 10,
-                                                              vertical: 4,
-                                                            ),
-                                                            decoration: BoxDecoration(
-                                                              color: LiquidTokens.lightIce.withValues(alpha: 0.22),
-                                                              borderRadius: BorderRadius.circular(999),
-                                                            ),
-                                                            child: Text(
-                                                              '作者: $a',
-                                                              style: const TextStyle(
-                                                                fontSize: 11,
-                                                                fontWeight: FontWeight.w600,
-                                                                color: LiquidTokens.lightSaltMist,
-                                                              ),
+                                                  children: [
+                                                    for (final a in d.authors)
+                                                      GestureDetector(
+                                                        onTap: () => Navigator.of(context).push(
+                                                          CupertinoPageRoute(
+                                                            builder: (_) => ExploreScreen(
+                                                              initialQuery: a,
+                                                              initialSearchType: 'author',
                                                             ),
                                                           ),
                                                         ),
-                                                      )
-                                                      .toList(),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 4,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: LiquidTokens.lightIce.withValues(alpha: 0.22),
+                                                            borderRadius: BorderRadius.circular(999),
+                                                          ),
+                                                          child: Text(
+                                                            '作者: $a',
+                                                            style: const TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: LiquidTokens.lightSaltMist,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    for (final w in d.works)
+                                                      GestureDetector(
+                                                        onTap: () => Navigator.of(context).push(
+                                                          CupertinoPageRoute(
+                                                            builder: (_) => ExploreScreen(
+                                                              initialQuery: w,
+                                                              initialSearchType: 'work',
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 4,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0x3393C5FD),
+                                                            borderRadius: BorderRadius.circular(999),
+                                                          ),
+                                                          child: Text(
+                                                            '原作: $w',
+                                                            style: const TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: CupertinoColors.white,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                    for (final act in d.actors)
+                                                      GestureDetector(
+                                                        onTap: () => Navigator.of(context).push(
+                                                          CupertinoPageRoute(
+                                                            builder: (_) => ExploreScreen(
+                                                              initialQuery: act,
+                                                              initialSearchType: 'actor',
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        child: Container(
+                                                          padding: const EdgeInsets.symmetric(
+                                                            horizontal: 10,
+                                                            vertical: 4,
+                                                          ),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0x33F4A2A6),
+                                                            borderRadius: BorderRadius.circular(999),
+                                                          ),
+                                                          child: Text(
+                                                            '角色: $act',
+                                                            style: const TextStyle(
+                                                              fontSize: 11,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: CupertinoColors.white,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ),
+                                                  ],
                                                 ),
                                               ],
                                             ],
@@ -539,7 +657,11 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                             ),
                           )
                         else
-                          for (final c in _comments.take(15)) CommentCardTile(comment: c),
+                          for (final c in _comments.take(15))
+                            CommentCardTile(
+                              comment: c,
+                              onReply: () => _openPostComment(replyTo: c),
+                            ),
                       ],
                     ),
                     // Floating Liquid Glass Action Dock at bottom

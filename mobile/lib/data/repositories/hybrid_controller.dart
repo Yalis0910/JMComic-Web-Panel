@@ -183,6 +183,10 @@ class HybridController extends StateNotifier<HybridState> {
     state = state.copyWith(account: UserAccountStatus.empty);
   }
 
+  Future<DailyCheckinInfo> getDailyInfo() async {
+    return activeSource.getDailyInfo();
+  }
+
   Future<CheckinResult> dailyCheckin() async {
     final res = await activeSource.dailyCheckin();
     await refreshAccount();

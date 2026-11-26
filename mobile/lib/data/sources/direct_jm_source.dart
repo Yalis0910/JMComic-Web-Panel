@@ -66,6 +66,9 @@ class DirectJmSource implements ComicDataSource {
   @override
   bool get supportsPostingComments => false;
 
+  @override
+  bool get supportsWebOnlyFilters => false;
+
   String get _cookieHeader {
     if (_cookies.isEmpty) return '';
     return _cookies.entries.map((e) => '${e.key}=${e.value}').join('; ');
@@ -259,6 +262,43 @@ class DirectJmSource implements ComicDataSource {
     );
   }
 
+  CommentItemModel _parseRawComment(Map<String, dynamic> c) {
+    final expinfo = c['expinfo'] is Map ? Map<String, dynamic>.from(c['expinfo']) : const {};
+    final rawReplies = (c['replys'] as List?) ?? const [];
+    final replies = rawReplies
+        .map((r) {
+          final rep = Map<String, dynamic>.from(r);
+          return CommentReplyModel(
+            cid: '${rep['CID'] ?? ''}',
+            username: '${rep['username'] ?? rep['nickname'] ?? ''}',
+            content: cleanCommentHtml('${rep['content'] ?? ''}'),
+            addtime: '${rep['addtime'] ?? ''}',
+          );
+        })
+        .toList();
+
+    return CommentItemModel(
+      cid: '${c['CID'] ?? ''}',
+      albumId: '${c['AID'] ?? ''}',
+      username: '${c['username'] ?? c['nickname'] ?? ''}',
+      levelName: '${expinfo['level_name'] ?? ''}',
+      content: cleanCommentHtml('${c['content'] ?? ''}'),
+      likes: '${c['likes'] ?? '0'}',
+      addtime: '${c['addtime'] ?? ''}',
+      spoiler: '${c['spoiler'] ?? '0'}' == '1',
+      replies: replies,
+    );
+  }
+
+  PagedComicsResult _parsePagedApiResult(dynamic data) {
+    if (data is! Map) return const PagedComicsResult();
+    final list = (data['content'] as List?) ?? const [];
+    final albums = list.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
+    final total = parseJsonInt(data['total'], albums.length);
+    final pageCount = max(1, (total / 20).ceil());
+    return PagedComicsResult(albums: albums, total: total, pageCount: pageCount);
+  }
+
   @override
   Future<List<({String title, List<ComicSummary> albums})>> getPromoteSections() async {
     final raw = await _reqApi('/promote', query: {'page': 1});
@@ -274,22 +314,130 @@ class DirectJmSource implements ComicDataSource {
   }
 
   @override
-  Future<List<ComicSummary>> getRanking(String type, {int page = 1, String category = '0'}) async {
-    final suffix = type == 'day'
-        ? 'mv_t'
-        : type == 'week'
-            ? 'mv_w'
-            : 'mv_m';
-    final data = await _reqApi(
-      '/categories/filter',
-      query: {'page': page, 'order': '', 'c': category, 'o': suffix},
+  Future<List<ComicSummary>> getLatest({int page = 1}) async {
+    final raw = await _reqApi('/latest', query: {'page': page});
+    if (raw is! List) return const [];
+    return raw.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
+  }
+
+  @override
+  Future<CategoryMetaResult> getCategoriesMeta() async {
+    final raw = await _reqApi('/categories');
+    final d = raw is Map ? Map<String, dynamic>.from(raw) : const <String, dynamic>{};
+    final catMap = <String, String>{
+      for (final c in CategoryMetaResult.fallbackCategories) c.value: c.label,
+    };
+    for (final item in (d['categories'] as List?) ?? const []) {
+      if (item is! Map) continue;
+      final m = Map<String, dynamic>.from(item);
+      final slug = '${m['slug'] ?? ''}'.trim();
+      final id = '${m['id'] ?? ''}'.trim();
+      final val = slug.isNotEmpty ? slug : id;
+      final label = '${m['name'] ?? m['title'] ?? ''}'.trim();
+      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val)) {
+        catMap[val] = label;
+      }
+    }
+    final hotTags = <String>[];
+    final seen = <String>{};
+    for (final b in (d['blocks'] as List?) ?? const []) {
+      if (b is! Map) continue;
+      for (final entry in (b['content'] as List?) ?? const []) {
+        final t = entry is Map ? '${entry['name'] ?? entry['title'] ?? ''}'.trim() : '$entry'.trim();
+        if (t.isNotEmpty && seen.add(t)) {
+          hotTags.add(t);
+        }
+      }
+    }
+    return CategoryMetaResult(
+      categories: catMap.entries.map((e) => CategoryOptionItem(value: e.key, label: e.value)).toList(),
+      hotTags: hotTags,
+      subCategories: const {},
     );
-    final list = (data['content'] as List?) ?? const [];
+  }
+
+  @override
+  Future<WeekMetaResult> getWeekMeta() async {
+    final raw = await _reqApi('/week');
+    final d = raw is Map ? Map<String, dynamic>.from(raw) : const <String, dynamic>{};
+    final cats = ((d['categories'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((c) {
+          final id = '${c['id'] ?? ''}'.trim();
+          final title = '${c['title'] ?? ''}'.trim();
+          final timeStr = '${c['time'] ?? ''}'.trim();
+          final label = (timeStr.isNotEmpty && title.isNotEmpty)
+              ? '$timeStr · $title'
+              : (title.isNotEmpty ? title : (timeStr.isNotEmpty ? timeStr : '第$id期'));
+          return WeekCategoryOption(id: id, title: label, time: timeStr);
+        })
+        .where((c) => c.id.isNotEmpty)
+        .toList();
+    const fallbacks = {'manga': '日漫', 'hanman': '韩漫', 'another': '其他'};
+    final types = ((d['type'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((t) {
+          final id = '${t['id'] ?? ''}'.trim();
+          final title = '${t['title'] ?? ''}'.trim();
+          return WeekTypeOption(id: id, title: title.isNotEmpty ? title : (fallbacks[id] ?? id));
+        })
+        .where((t) => t.id.isNotEmpty)
+        .toList();
+    return WeekMetaResult(categories: cats, types: types);
+  }
+
+  @override
+  Future<List<ComicSummary>> getWeekFilter(String categoryId, {String typeId = 'manga'}) async {
+    final raw = await _reqApi('/week/filter', query: {'id': categoryId, 'type': typeId});
+    final list = (raw is Map ? raw['list'] as List? : null) ?? const [];
     return list.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
   }
 
   @override
-  Future<List<ComicSummary>> search(String query, {String type = 'all', int page = 1}) async {
+  Future<PagedComicsResult> getRanking(String type, {int page = 1, String category = '0'}) async {
+    final o = switch (type) {
+      'day' => 'mv_t',
+      'week' => 'mv_w',
+      'month' => 'mv_m',
+      'all' => 'mv',
+      'likes' => 'tf',
+      'latest' => 'mr',
+      _ => 'mv_t',
+    };
+    final data = await _reqApi(
+      '/categories/filter',
+      query: {'page': page, 'order': '', 'c': category, 'o': o},
+    );
+    return _parsePagedApiResult(data);
+  }
+
+  @override
+  Future<PagedComicsResult> getCategoryFilter({
+    int page = 1,
+    String time = 'a',
+    String orderBy = 'mv',
+    String category = '0',
+    String? subCategory,
+  }) async {
+    final safeOrder = (orderBy == 'tr' || orderBy == 'md') ? 'mv' : orderBy;
+    final o = time == 'a' ? safeOrder : '${safeOrder}_$time';
+    final data = await _reqApi(
+      '/categories/filter',
+      query: {'page': page, 'order': '', 'c': category, 'o': o},
+    );
+    return _parsePagedApiResult(data);
+  }
+
+  @override
+  Future<PagedComicsResult> search(
+    String query, {
+    String type = 'all',
+    int page = 1,
+    String orderBy = 'mr',
+    String time = 'a',
+    String category = '0',
+    String? subCategory,
+  }) async {
     final mainTag = switch (type) {
       'work' => 1,
       'author' => 2,
@@ -297,26 +445,37 @@ class DirectJmSource implements ComicDataSource {
       'actor' => 4,
       _ => 0,
     };
+    final safeOrder = (orderBy == 'tr' || orderBy == 'md') ? 'mr' : orderBy;
     final data = await _reqApi(
       '/search',
-      query: {'main_tag': mainTag, 'search_query': query, 'page': page, 'o': 'mr', 't': 'a'},
+      query: {'main_tag': mainTag, 'search_query': query, 'page': page, 'o': safeOrder, 't': time},
     );
     final redirectAid = data['redirect_aid'];
     if (redirectAid != null) {
       final detail = await getAlbumDetail('$redirectAid');
-      return [
-        ComicSummary(
-          albumId: detail.albumId,
-          title: detail.title,
-          author: detail.authors.join(', '),
-          tags: detail.tags,
-          coverUrl: detail.coverUrl,
-          coverFallbacks: detail.coverFallbacks,
-        ),
-      ];
+      return PagedComicsResult(
+        albums: [
+          ComicSummary(
+            albumId: detail.albumId,
+            title: detail.title,
+            author: detail.authors.join(', '),
+            tags: detail.tags,
+            coverUrl: detail.coverUrl,
+            coverFallbacks: detail.coverFallbacks,
+          ),
+        ],
+        total: 1,
+        pageCount: 1,
+      );
     }
-    final list = (data['content'] as List?) ?? const [];
-    return list.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
+    return _parsePagedApiResult(data);
+  }
+
+  @override
+  Future<List<CommentItemModel>> getForumComments({int page = 1}) async {
+    final data = await _reqApi('/forum', query: {'mode': 'all', 'page': page});
+    final list = (data['list'] as List?) ?? const [];
+    return list.map((raw) => _parseRawComment(Map<String, dynamic>.from(raw))).toList();
   }
 
   @override
@@ -340,11 +499,15 @@ class DirectJmSource implements ComicDataSource {
       albumId: '${d['id']}',
       title: '${d['name'] ?? ''}',
       authors: (d['author'] as List?)?.map((e) => '$e').toList() ?? const [],
+      works: (d['works'] as List?)?.map((e) => '$e').toList() ?? const [],
+      actors: (d['actors'] as List?)?.map((e) => '$e').toList() ?? const [],
       tags: (d['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
       description: cleanCommentHtml('${d['description'] ?? ''}'),
       views: '${d['total_views'] ?? '0'}',
       likes: '${d['likes'] ?? '0'}',
       commentCount: int.tryParse('${d['comment_total'] ?? '0'}') ?? 0,
+      pubDate: '${d['pub_date'] ?? ''}',
+      updateDate: '${d['update_date'] ?? ''}',
       coverUrl: covers.first,
       coverFallbacks: covers.skip(1).toList(),
       episodes: episodes,
@@ -352,6 +515,7 @@ class DirectJmSource implements ComicDataSource {
           .map((r) => _parseRawAlbum(Map<String, dynamic>.from(r)))
           .toList(),
       isFavorite: d['is_favorite'] == true,
+      liked: d['liked'] == true,
     );
   }
 
@@ -390,33 +554,7 @@ class DirectJmSource implements ComicDataSource {
   Future<List<CommentItemModel>> getComments(String albumId, {int page = 1}) async {
     final data = await _reqApi('/forum', query: {'mode': 'manhua', 'aid': albumId, 'page': page});
     final list = (data['list'] as List?) ?? const [];
-    return list.map((raw) {
-      final c = Map<String, dynamic>.from(raw);
-      final expinfo = c['expinfo'] is Map ? Map<String, dynamic>.from(c['expinfo']) : const {};
-      final rawReplies = (c['replys'] as List?) ?? const [];
-      final replies = rawReplies
-          .map((r) {
-            final rep = Map<String, dynamic>.from(r);
-            return CommentReplyModel(
-              cid: '${rep['CID'] ?? ''}',
-              username: '${rep['username'] ?? rep['nickname'] ?? ''}',
-              content: cleanCommentHtml('${rep['content'] ?? ''}'),
-              addtime: '${rep['addtime'] ?? ''}',
-            );
-          })
-          .toList();
-
-      return CommentItemModel(
-        cid: '${c['CID'] ?? ''}',
-        username: '${c['username'] ?? c['nickname'] ?? ''}',
-        levelName: '${expinfo['level_name'] ?? ''}',
-        content: cleanCommentHtml('${c['content'] ?? ''}'),
-        likes: '${c['likes'] ?? '0'}',
-        addtime: '${c['addtime'] ?? ''}',
-        spoiler: '${c['spoiler'] ?? '0'}' == '1',
-        replies: replies,
-      );
-    }).toList();
+    return list.map((raw) => _parseRawComment(Map<String, dynamic>.from(raw))).toList();
   }
 
   @override
@@ -611,6 +749,47 @@ class DirectJmSource implements ComicDataSource {
   @override
   Future<void> removeFavorite(String albumId) {
     return _toggleFavorite(albumId, expectedType: 'remove');
+  }
+
+  @override
+  Future<DailyCheckinInfo> getDailyInfo() async {
+    await _ensureSessionLoaded();
+    if (!_account.isLoggedIn || _account.uid.isEmpty) {
+      throw Exception('请先登录 JM 账号');
+    }
+    final raw = await _reqApi('/daily', query: {'user_id': _account.uid});
+    if (raw is! Map) {
+      return const DailyCheckinInfo();
+    }
+    final d = Map<String, dynamic>.from(raw);
+    final days = <DailyDayStatus>[];
+    for (final week in (d['record'] as List?) ?? const []) {
+      if (week is! List) continue;
+      for (final cell in week) {
+        if (cell is! Map) continue;
+        final label = '${cell['date'] ?? ''}'.trim();
+        if (label.isEmpty) continue;
+        days.add(
+          DailyDayStatus(
+            day: parseJsonInt(label),
+            label: label,
+            signed: cell['signed'] is bool ? cell['signed'] as bool : null,
+            bonus: cell['bonus'] == true,
+          ),
+        );
+      }
+    }
+    return DailyCheckinInfo(
+      dailyId: '${d['daily_id'] ?? ''}',
+      eventName: '${d['event_name'] ?? '每日签到'}',
+      progressText: '${d['currentProgress'] ?? ''}',
+      streakDays: days.where((e) => e.signed == true).length,
+      threeDaysCoin: '${d['three_days_coin'] ?? ''}',
+      threeDaysExp: '${d['three_days_exp'] ?? ''}',
+      sevenDaysCoin: '${d['seven_days_coin'] ?? ''}',
+      sevenDaysExp: '${d['seven_days_exp'] ?? ''}',
+      days: days,
+    );
   }
 
   @override

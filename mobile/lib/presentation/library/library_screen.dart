@@ -20,6 +20,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   FavoritePageResult? _favResult;
   List<FavoriteFolder> _folders = const [];
   String _folderId = '0';
+  String _orderBy = 'mr';
   int _page = 1;
   bool _favLoading = false;
   String? _favError;
@@ -47,7 +48,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       final res = await ref
           .read(hybridControllerProvider.notifier)
           .activeSource
-          .getFavorites(page: _page, folderId: _folderId);
+          .getFavorites(page: _page, folderId: _folderId, orderBy: _orderBy);
       if (mounted) {
         setState(() {
           _favResult = res;
@@ -263,7 +264,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ),
           ),
         ),
-      if (folders.isNotEmpty) const SliverToBoxAdapter(child: SizedBox(height: 14)),
+      if (folders.isNotEmpty) const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+          child: LiquidSegmentedPill<String>(
+            value: _orderBy,
+            items: const [
+              (value: 'mr', label: '收藏时间'),
+              (value: 'mp', label: '更新时间'),
+            ],
+            onChanged: (v) {
+              setState(() {
+                _orderBy = v;
+                _page = 1;
+              });
+              _loadFavorites();
+            },
+          ),
+        ),
+      ),
       if (albums.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,

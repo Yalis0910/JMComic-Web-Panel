@@ -194,3 +194,108 @@ def test_week_categories_fallback_labels(monkeypatch):
     assert res["categories"][0]["title"] == "2026第266期11.20 - 11.13"
     assert res["categories"][1]["title"] == "2022第55期 · 精选专题"
     assert res["types"][1]["title"] == "韩漫"
+
+
+def test_extended_discovery_and_daily_apis(tmp_path: Path, monkeypatch):
+    from types import SimpleNamespace
+    from fastapi.testclient import TestClient
+    from app.core.config import config_manager
+    from app.services.jm_adapter import jm_adapter
+    import app.main as main_mod
+
+    config_manager.configure_data_dir(tmp_path / "data")
+
+    calls = []
+
+    class FakePage:
+        content = [("555", {"name": "Rank Item", "author": ["A"], "tags": ["全彩"]})]
+        total = 1
+        page_count = 1
+        page_size = 20
+
+    class FakeClient:
+        def categories_filter(self, page, time, category, order_by, sub_category=None):
+            calls.append(("filter", page, time, category, order_by, sub_category))
+            return FakePage()
+
+        def forum_pagination(self, page=1):
+            comment = SimpleNamespace(
+                comment_id="88",
+                album_id="555",
+                username="tester",
+                nickname="tester",
+                content="<div>好看<br/>推荐</div>",
+                likes=5,
+                created_at="2026-11-20",
+                is_spoiler=False,
+                replies=[],
+                raw_data={"AID": "555", "expinfo": {"level": 2, "level_name": "骑士"}},
+            )
+            return SimpleNamespace(content=[comment], total=1, page_count=1)
+
+        def get_daily(self):
+            return SimpleNamespace(
+                res_data={
+                    "daily_id": 72,
+                    "event_name": "11月签到",
+                    "currentProgress": "25%",
+                    "three_days_coin": "150",
+                    "three_days_exp": "150",
+                    "seven_days_coin": "350",
+                    "seven_days_exp": "350",
+                    "record": [
+                        [{"date": "01", "signed": True, "bonus": False}, {"date": "02", "signed": None, "bonus": True}]
+                    ],
+                }
+            )
+
+    fake_api = SimpleNamespace(
+        req_api=lambda path, **kw: SimpleNamespace(
+            res_data={
+                "categories": [{"id": "0", "name": "全部", "slug": ""}],
+                "blocks": [{"title": "热门", "content": ["全彩", "无修正"]}],
+            }
+        )
+    )
+    fake_client = FakeClient()
+    html_calls = []
+
+    class FakeHtmlClient(FakeClient):
+        def categories_filter(self, page, time, category, order_by, sub_category=None):
+            html_calls.append((page, time, category, order_by, sub_category))
+            return FakePage()
+
+    monkeypatch.setattr(jm_adapter, "get_client", lambda impl=None, prefer_auth=True: fake_client)
+    monkeypatch.setattr(jm_adapter, "get_html_client", lambda prefer_auth=True: FakeHtmlClient())
+    monkeypatch.setattr(jm_adapter, "get_api_client", lambda prefer_auth=True: fake_api)
+    monkeypatch.setattr(jm_adapter, "_require_auth_client", lambda: fake_client)
+
+    with TestClient(main_mod.app) as client:
+        r_all = client.get("/api/v2/discovery/ranking/all?category=english_site")
+        assert r_all.status_code == 200
+        assert calls[-1] == ("filter", 1, "a", "english_site", "mv", None)
+
+        r_likes = client.get("/api/v2/discovery/ranking/likes")
+        assert r_likes.status_code == 200
+        assert calls[-1] == ("filter", 1, "a", "0", "tf", None)
+
+        r_tr = client.get("/api/v2/discovery/filter?order_by=tr&category=doujin&sub_category=CG")
+        assert r_tr.status_code == 200
+        assert html_calls[-1] == (1, "a", "doujin", "tr", "CG")
+
+        r_cats = client.get("/api/v2/discovery/categories")
+        assert r_cats.status_code == 200
+        assert "doujin" in r_cats.json()["data"]["sub_categories"]
+
+        r_forum = client.get("/api/v2/discovery/forum?page=1")
+        assert r_forum.status_code == 200
+        assert r_forum.json()["data"]["comments"][0]["album_id"] == "555"
+        assert r_forum.json()["data"]["comments"][0]["content"] == "好看\n推荐"
+
+        r_daily = client.get("/api/v2/user/daily")
+        assert r_daily.status_code == 200
+        daily_data = r_daily.json()["data"]
+        assert daily_data["event_name"] == "11月签到"
+        assert len(daily_data["days"]) == 2
+        assert daily_data["days"][0]["signed"] is True
+        assert daily_data["days"][1]["bonus"] is True

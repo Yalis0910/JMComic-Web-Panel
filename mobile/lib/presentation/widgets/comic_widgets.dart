@@ -387,7 +387,14 @@ class SkeletonGridSliver extends StatelessWidget {
 
 class CommentCardTile extends StatefulWidget {
   final CommentItemModel comment;
-  const CommentCardTile({super.key, required this.comment});
+  final VoidCallback? onReply;
+  final VoidCallback? onOpenAlbum;
+  const CommentCardTile({
+    super.key,
+    required this.comment,
+    this.onReply,
+    this.onOpenAlbum,
+  });
 
   @override
   State<CommentCardTile> createState() => _CommentCardTileState();
@@ -548,6 +555,61 @@ class _CommentCardTileState extends State<CommentCardTile> {
                       )
                       .toList(),
                 ),
+              ),
+            ],
+            if (widget.onReply != null || (widget.onOpenAlbum != null && c.albumId.isNotEmpty)) ...[
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (widget.onOpenAlbum != null && c.albumId.isNotEmpty)
+                    GestureDetector(
+                      onTap: widget.onOpenAlbum,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: LiquidTokens.accentSoft(context),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '查看 JM${c.albumId} →',
+                          style: TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: LiquidTokens.accentStrong(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (widget.onOpenAlbum != null && c.albumId.isNotEmpty && widget.onReply != null)
+                    const SizedBox(width: 8),
+                  if (widget.onReply != null)
+                    GestureDetector(
+                      onTap: widget.onReply,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: LiquidTokens.elevated(context),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(CupertinoIcons.reply, size: 12, color: LiquidTokens.muted(context)),
+                            const SizedBox(width: 4),
+                            Text(
+                              '回复',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w600,
+                                color: LiquidTokens.muted(context),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
               ),
             ],
           ],

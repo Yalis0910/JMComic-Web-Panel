@@ -73,6 +73,17 @@ async def remove_favorite(album_id: str):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@router.get("/daily")
+async def get_daily_info():
+    try:
+        data = await run_blocking(jm_adapter.get_daily_info)
+        return ok(data)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @router.post("/checkin")
 async def daily_checkin():
     try:

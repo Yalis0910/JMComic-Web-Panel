@@ -36,4 +36,33 @@ void main() {
     expect(status.favoritesCount, 14);
     expect(status.favoritesMax, 500);
   });
+
+  test('DailyCheckinInfo.fromJson parses calendar days and rewards', () {
+    final info = DailyCheckinInfo.fromJson({
+      'daily_id': '72',
+      'event_name': '11月签到',
+      'progress_text': '25%',
+      'streak_days': 2,
+      'checked_in_today': true,
+      'rewards': {
+        'three_days_coin': '150',
+        'three_days_exp': '150',
+        'seven_days_coin': '350',
+        'seven_days_exp': '350',
+      },
+      'days': [
+        {'day': 1, 'label': '01', 'signed': true, 'bonus': false},
+        {'day': 2, 'label': '02', 'signed': null, 'bonus': true},
+      ],
+    });
+
+    expect(info.eventName, '11月签到');
+    expect(info.streakDays, 2);
+    expect(info.checkedInToday, isTrue);
+    expect(info.sevenDaysCoin, '350');
+    expect(info.days.length, 2);
+    expect(info.days[0].signed, isTrue);
+    expect(info.days[1].bonus, isTrue);
+    expect(info.days[1].signed, isNull);
+  });
 }

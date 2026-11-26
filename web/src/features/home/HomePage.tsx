@@ -8,6 +8,7 @@ import { ComicCard } from '../../components/liquid/ComicCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
 import { SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { extractHotTags } from '../../utils/categories';
 
 export function HomePage() {
   const navigate = useNavigate();
@@ -30,6 +31,25 @@ export function HomePage() {
     queryFn: () => api.getLatest(1),
     staleTime: 5 * 60 * 1000,
   });
+
+  const { data: categoriesMeta } = useQuery({
+    queryKey: ['categoriesMeta'],
+    queryFn: api.getCategoriesMeta,
+    staleTime: 30 * 60 * 1000,
+  });
+
+  const mergedTags = React.useMemo(() => {
+    const official = extractHotTags(categoriesMeta, 12);
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of [...official, ...quickTags]) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    return out.slice(0, 14);
+  }, [categoriesMeta, quickTags]);
 
   const onSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +138,7 @@ export function HomePage() {
 
             {/* Clear Glass Quick Tags */}
             <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-0.5">
-              {quickTags.map((tag) => (
+              {mergedTags.map((tag) => (
                 <button
                   key={tag}
                   type="button"

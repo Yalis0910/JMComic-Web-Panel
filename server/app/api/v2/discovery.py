@@ -63,10 +63,19 @@ async def get_ranking(
     page: int = Query(1, ge=1),
     category: str = Query("0"),
 ):
-    if ranking_type not in ("day", "week", "month"):
+    if ranking_type not in ("day", "week", "month", "all", "likes", "latest"):
         raise HTTPException(status_code=400, detail=f"不支持的排行类型: {ranking_type}")
     try:
         data = await run_blocking(jm_adapter.get_ranking, ranking_type, page, category)
+        return ok(data)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.get("/forum")
+async def get_forum_comments(page: int = Query(1, ge=1)):
+    try:
+        data = await run_blocking(jm_adapter.get_forum_comments, page)
         return ok(data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

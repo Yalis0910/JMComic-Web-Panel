@@ -392,9 +392,31 @@ class JMProtocolAdapter:
         client = self.get_api_client()
         resp = client.req_api("/categories")
         data = resp.res_data if isinstance(resp.res_data, dict) else {}
+        sub_categories = {
+            "doujin": [
+                {"slug": JmMagicConstants.SUB_DOUJIN_CHINESE, "name": "汉化"},
+                {"slug": JmMagicConstants.SUB_DOUJIN_JAPANESE, "name": "日语"},
+                {"slug": JmMagicConstants.SUB_DOUJIN_CG, "name": "CG"},
+            ],
+            "single": [
+                {"slug": JmMagicConstants.SUB_SINGLE_CHINESE, "name": "汉化"},
+                {"slug": JmMagicConstants.SUB_SINGLE_JAPANESE, "name": "日语"},
+                {"slug": JmMagicConstants.SUB_SINGLE_YOUTH, "name": "青年"},
+            ],
+            "short": [
+                {"slug": JmMagicConstants.SUB_SHORT_CHINESE, "name": "汉化"},
+                {"slug": JmMagicConstants.SUB_SHORT_JAPANESE, "name": "日语"},
+            ],
+            "another": [
+                {"slug": JmMagicConstants.SUB_ANOTHER_OTHER, "name": "其他"},
+                {"slug": JmMagicConstants.SUB_ANOTHER_3D, "name": "3D"},
+                {"slug": JmMagicConstants.SUB_ANOTHER_COSPLAY, "name": "Cosplay"},
+            ],
+        }
         return {
             "categories": data.get("categories", []),
             "blocks": data.get("blocks", []),
+            "sub_categories": sub_categories,
         }
 
     def get_ranking(self, ranking_type: str, page: int = 1, category: str = "0") -> Dict[str, Any]:
@@ -406,6 +428,27 @@ class JMProtocolAdapter:
             res = client.week_ranking(page=page, category=cat)
         elif ranking_type == "month":
             res = client.month_ranking(page=page, category=cat)
+        elif ranking_type == "all":
+            res = client.categories_filter(
+                page=page,
+                time=JmMagicConstants.TIME_ALL,
+                category=cat,
+                order_by=JmMagicConstants.ORDER_BY_VIEW,
+            )
+        elif ranking_type == "likes":
+            res = client.categories_filter(
+                page=page,
+                time=JmMagicConstants.TIME_ALL,
+                category=cat,
+                order_by=JmMagicConstants.ORDER_BY_LIKE,
+            )
+        elif ranking_type == "latest":
+            res = client.categories_filter(
+                page=page,
+                time=JmMagicConstants.TIME_ALL,
+                category=cat,
+                order_by=JmMagicConstants.ORDER_BY_LATEST,
+            )
         else:
             raise ValueError(f"不支持的排行类型: {ranking_type}")
         return _format_page_albums(res)
@@ -418,8 +461,12 @@ class JMProtocolAdapter:
         order_by: str = "mv",
         sub_category: Optional[str] = None,
     ) -> Dict[str, Any]:
-        # 副分类筛选仅网页端支持，若传入 sub_category 自动使用 HTML 客户端
-        client = self.get_html_client() if sub_category else self.get_client()
+        # 副分类、评分(tr)与评论数(md)排序仅网页端支持，自动切换 HTML 客户端
+        use_html = bool(sub_category) or order_by in (
+            JmMagicConstants.ORDER_BY_SCORE,
+            JmMagicConstants.ORDER_BY_COMMENT,
+        )
+        client = self.get_html_client() if use_html else self.get_client()
         cat = "0" if category == "ALL" else category
         t = JmMagicConstants.TIME_ALL if time_range in ("ALL", "", "a") else time_range
         res = client.categories_filter(
@@ -443,8 +490,12 @@ class JMProtocolAdapter:
         category: str = "0",
         sub_category: Optional[str] = None,
     ) -> Dict[str, Any]:
-        # 分类/副分类过滤仅 HTML 客户端支持，否则优先用当前默认客户端
-        use_html = (category not in ("0", "ALL", "")) or bool(sub_category)
+        # 分类/副分类及评分/评论排序仅 HTML 客户端支持，否则优先用当前默认客户端
+        use_html = (
+            (category not in ("0", "ALL", ""))
+            or bool(sub_category)
+            or order_by in (JmMagicConstants.ORDER_BY_SCORE, JmMagicConstants.ORDER_BY_COMMENT)
+        )
         client = self.get_html_client() if use_html else self.get_client()
         cat = "0" if category == "ALL" else category
 
@@ -498,6 +549,7 @@ class JMProtocolAdapter:
             "related": related,
             "cover_url": _cover_proxy_url(str(album.album_id)),
             "is_favorite": bool(getattr(album, "is_favorite", False)),
+            "liked": bool(getattr(album, "liked", False)),
         }
 
     def get_photo_detail(self, photo_id: str) -> Dict[str, Any]:
@@ -575,6 +627,50 @@ class JMProtocolAdapter:
             "page": page,
         }
 
+    def get_forum_comments(self, page: int = 1) -> Dict[str, Any]:
+        client = self.get_client()
+        res = client.forum_pagination(page=page)
+        comments = []
+        for c in getattr(res, "content", []) or []:
+            raw = getattr(c, "raw_data", {}) or {}
+            expinfo = raw.get("expinfo") if isinstance(raw, dict) else None
+            replies = []
+            for rep in getattr(c, "replies", []) or []:
+                rep_raw = getattr(rep, "raw_data", {}) or {}
+                replies.append(
+                    {
+                        "cid": str(getattr(rep, "comment_id", "") or ""),
+                        "username": str(getattr(rep, "username", None) or getattr(rep, "nickname", None) or ""),
+                        "content": clean_html_text(getattr(rep, "content", "")),
+                        "addtime": str(getattr(rep, "created_at", "") or ""),
+                        "photo": str(rep_raw.get("photo", "") if isinstance(rep_raw, dict) else ""),
+                    }
+                )
+            album_id = str(getattr(c, "album_id", None) or (raw.get("AID") if isinstance(raw, dict) else "") or "")
+            likes_val = getattr(c, "likes", None)
+            comments.append(
+                {
+                    "cid": str(getattr(c, "comment_id", "") or ""),
+                    "album_id": album_id,
+                    "username": str(getattr(c, "username", None) or getattr(c, "nickname", None) or ""),
+                    "level": expinfo.get("level") if isinstance(expinfo, dict) else None,
+                    "level_name": expinfo.get("level_name") if isinstance(expinfo, dict) else "",
+                    "content": clean_html_text(getattr(c, "content", "")),
+                    "likes": str(likes_val if likes_val is not None else "0"),
+                    "addtime": str(getattr(c, "created_at", "") or ""),
+                    "spoiler": bool(getattr(c, "is_spoiler", False)),
+                    "replies": replies,
+                }
+            )
+        total = getattr(res, "total", None)
+        page_count = getattr(res, "page_count", None)
+        return {
+            "comments": comments,
+            "total": int(total if total is not None else len(comments)),
+            "page": page,
+            "page_count": int(page_count or 1),
+        }
+
     def post_comment(self, album_id: str, comment: str, comment_id: Optional[str] = None, spoiler: bool = False) -> Dict[str, Any]:
         if not self._username:
             raise PermissionError("请先登录账号后再发表评论")
@@ -623,6 +719,12 @@ class JMProtocolAdapter:
 
     def add_favorite(self, album_id: str, folder_id: str = "0") -> None:
         client = self._require_auth_client()
+        if folder_id not in ("0", "") and self._user_impl == "api" and self._username and self._password_enc:
+            opt = self._build_option(impl="html")
+            html_client = opt.new_jm_client()
+            html_client.login(self._username, decrypt_secret(self._password_enc))
+            html_client.add_favorite_album(album_id=album_id, folder_id=folder_id)
+            return
         client.add_favorite_album(album_id=album_id, folder_id=folder_id)
 
     def remove_favorite(self, album_id: str) -> None:
@@ -632,10 +734,92 @@ class JMProtocolAdapter:
         else:
             client.remove_favorite_album(album_id=album_id)
 
+    def get_daily_info(self) -> Dict[str, Any]:
+        client = self._require_auth_client()
+        if not hasattr(client, "get_daily"):
+            raise RuntimeError("当前客户端不支持查询每日签到日历")
+        resp = client.get_daily()
+        raw = resp.res_data if isinstance(getattr(resp, "res_data", None), dict) else None
+        if raw is None and hasattr(resp, "json"):
+            try:
+                parsed = resp.json()
+                raw = parsed if isinstance(parsed, dict) else {}
+            except Exception:
+                raw = {}
+        raw = raw or {}
+
+        days: List[Dict[str, Any]] = []
+        if isinstance(raw.get("record"), list):
+            for week in raw["record"]:
+                if not isinstance(week, list):
+                    continue
+                for cell in week:
+                    if not isinstance(cell, dict):
+                        continue
+                    label = str(cell.get("date") or "").strip()
+                    if not label:
+                        continue
+                    days.append(
+                        {
+                            "day": _safe_int(label, 0),
+                            "label": label,
+                            "signed": cell.get("signed"),
+                            "bonus": bool(cell.get("bonus")),
+                        }
+                    )
+            signed_count = sum(1 for d in days if d["signed"] is True)
+            return {
+                "daily_id": str(raw.get("daily_id") or ""),
+                "event_name": str(raw.get("event_name") or "每日签到"),
+                "progress_text": str(raw.get("currentProgress") or ""),
+                "streak_days": signed_count,
+                "checked_in_today": False,
+                "rewards": {
+                    "three_days_coin": str(raw.get("three_days_coin") or ""),
+                    "three_days_exp": str(raw.get("three_days_exp") or ""),
+                    "seven_days_coin": str(raw.get("seven_days_coin") or ""),
+                    "seven_days_exp": str(raw.get("seven_days_exp") or ""),
+                },
+                "days": days,
+            }
+
+        signed_set = {_safe_int(x, 0) for x in (raw.get("dateArray") or []) if _safe_int(x, 0) > 0}
+        miss_set = {_safe_int(x, 0) for x in (raw.get("dateMiss") or []) if _safe_int(x, 0) > 0}
+        event_set = set()
+        for dt_str in raw.get("dateEvent") or []:
+            text = str(dt_str or "").strip()
+            if len(text) >= 10 and text[8:10].isdigit():
+                event_set.add(_safe_int(text[8:10], 0))
+        all_nums = sorted(signed_set | miss_set | event_set)
+        for num in all_nums:
+            signed_val: Optional[bool] = True if num in signed_set else (False if num in miss_set else None)
+            days.append(
+                {
+                    "day": num,
+                    "label": f"{num:02d}",
+                    "signed": signed_val,
+                    "bonus": num in event_set,
+                }
+            )
+        return {
+            "daily_id": "",
+            "event_name": "本月签到活动",
+            "progress_text": "",
+            "streak_days": _safe_int(raw.get("oldStep"), len(signed_set)),
+            "checked_in_today": raw.get("error") == "finished",
+            "rewards": {
+                "three_days_coin": "",
+                "three_days_exp": "",
+                "seven_days_coin": "",
+                "seven_days_exp": "",
+            },
+            "days": days,
+        }
+
     def daily_checkin(self) -> Dict[str, Any]:
         client = self._require_auth_client()
         if not hasattr(client, "daily_checkin"):
-            raise RuntimeError("当前协议通道不支持每日签到，请切换至 APP 端通道")
+            raise RuntimeError("当前协议通道不支持每日签到")
         res = client.daily_checkin()
         return {
             "code": int(getattr(res, "code", 0)),

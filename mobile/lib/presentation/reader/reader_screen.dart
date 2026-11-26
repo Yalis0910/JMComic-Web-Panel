@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
@@ -100,7 +99,9 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         physics: const BouncingScrollPhysics(),
                         itemCount: _images.length,
                         itemBuilder: (ctx, idx) {
-                          _onPageChanged(idx);
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) _onPageChanged(idx);
+                          });
                           return _ReaderPageImage(loader: () => _loadPageBytes(_images[idx]));
                         },
                       )

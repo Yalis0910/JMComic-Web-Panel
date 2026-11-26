@@ -252,7 +252,11 @@ def test_extended_discovery_and_daily_apis(tmp_path: Path, monkeypatch):
     fake_api = SimpleNamespace(
         req_api=lambda path, **kw: SimpleNamespace(
             res_data={
-                "categories": [{"id": "0", "name": "全部", "slug": ""}],
+                "categories": [
+                    {"id": "0", "name": "全部", "slug": ""},
+                    {"id": "7", "name": "Cosplay", "slug": "another_cosplay", "type": "search"},
+                    {"id": "8", "name": "3D", "slug": "3D", "type": "search"},
+                ],
                 "blocks": [{"title": "热门", "content": ["全彩", "无修正"]}],
             }
         )
@@ -285,7 +289,13 @@ def test_extended_discovery_and_daily_apis(tmp_path: Path, monkeypatch):
 
         r_cats = client.get("/api/v2/discovery/categories")
         assert r_cats.status_code == 200
-        assert "doujin" in r_cats.json()["data"]["sub_categories"]
+        cats_data = r_cats.json()["data"]
+        assert "doujin" in cats_data["sub_categories"]
+        assert all(c.get("type") != "search" for c in cats_data["categories"])
+
+        r_3d = client.get("/api/v2/discovery/ranking/all?category=3D")
+        assert r_3d.status_code == 200
+        assert html_calls[-1] == (1, "a", "another", "mv", "3d")
 
         r_forum = client.get("/api/v2/discovery/forum?page=1")
         assert r_forum.status_code == 200

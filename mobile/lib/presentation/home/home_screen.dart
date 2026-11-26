@@ -65,6 +65,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<HybridState>(hybridControllerProvider, (prev, next) {
+      if (prev != null && prev.activeMode != next.activeMode) {
+        _load();
+      }
+    });
     final hybrid = ref.watch(hybridControllerProvider);
     final isLan = hybrid.activeMode == ActiveMode.lanServer;
     final modeText = isLan ? '局域网' : '直连';

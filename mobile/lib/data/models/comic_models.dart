@@ -266,7 +266,6 @@ class CategoryMetaResult {
     CategoryOptionItem(value: 'meiman', label: '美漫'),
     CategoryOptionItem(value: 'another', label: '其他'),
     CategoryOptionItem(value: 'english_site', label: 'Eng'),
-    CategoryOptionItem(value: '3D', label: '3D'),
     CategoryOptionItem(value: 'doujin_cosplay', label: 'Cosplay'),
   ];
 
@@ -275,20 +274,29 @@ class CategoryMetaResult {
       SubCategoryOptionItem(slug: 'chinese', name: '汉化'),
       SubCategoryOptionItem(slug: 'japanese', name: '日语'),
       SubCategoryOptionItem(slug: 'CG', name: 'CG'),
+      SubCategoryOptionItem(slug: 'no_mosaic', name: '去码'),
+      SubCategoryOptionItem(slug: 'coloring', name: '上色'),
     ],
     'single': [
       SubCategoryOptionItem(slug: 'chinese', name: '汉化'),
       SubCategoryOptionItem(slug: 'japanese', name: '日语'),
       SubCategoryOptionItem(slug: 'youth', name: '青年'),
+      SubCategoryOptionItem(slug: 'no_mosaic', name: '去码'),
+      SubCategoryOptionItem(slug: 'coloring', name: '上色'),
     ],
     'short': [
       SubCategoryOptionItem(slug: 'chinese', name: '汉化'),
       SubCategoryOptionItem(slug: 'japanese', name: '日语'),
+      SubCategoryOptionItem(slug: 'no_mosaic', name: '去码'),
+      SubCategoryOptionItem(slug: 'coloring', name: '上色'),
     ],
     'another': [
       SubCategoryOptionItem(slug: 'other', name: '其他'),
       SubCategoryOptionItem(slug: '3d', name: '3D'),
       SubCategoryOptionItem(slug: 'cosplay', name: 'Cosplay'),
+    ],
+    'hanman': [
+      SubCategoryOptionItem(slug: 'chinese', name: '汉化'),
     ],
   };
 }
@@ -319,11 +327,13 @@ class PagedComicsResult {
   final List<ComicSummary> albums;
   final int total;
   final int pageCount;
+  final int pageSize;
 
   const PagedComicsResult({
     this.albums = const [],
     this.total = 0,
     this.pageCount = 1,
+    this.pageSize = 80,
   });
 }
 

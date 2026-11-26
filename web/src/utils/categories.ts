@@ -19,7 +19,6 @@ export const FALLBACK_CATEGORIES: CategoryOption[] = [
   { value: 'meiman', label: '美漫' },
   { value: 'another', label: '其他' },
   { value: 'english_site', label: 'Eng' },
-  { value: '3D', label: '3D' },
   { value: 'doujin_cosplay', label: 'Cosplay' },
 ];
 
@@ -28,38 +27,48 @@ export const FALLBACK_SUB_CATEGORIES: Record<string, SubCategoryOption[]> = {
     { slug: 'chinese', name: '汉化' },
     { slug: 'japanese', name: '日语' },
     { slug: 'CG', name: 'CG' },
+    { slug: 'no_mosaic', name: '去码' },
+    { slug: 'coloring', name: '上色' },
   ],
   single: [
     { slug: 'chinese', name: '汉化' },
     { slug: 'japanese', name: '日语' },
     { slug: 'youth', name: '青年' },
+    { slug: 'no_mosaic', name: '去码' },
+    { slug: 'coloring', name: '上色' },
   ],
   short: [
     { slug: 'chinese', name: '汉化' },
     { slug: 'japanese', name: '日语' },
+    { slug: 'no_mosaic', name: '去码' },
+    { slug: 'coloring', name: '上色' },
   ],
   another: [
     { slug: 'other', name: '其他' },
     { slug: '3d', name: '3D' },
     { slug: 'cosplay', name: 'Cosplay' },
   ],
+  hanman: [{ slug: 'chinese', name: '汉化' }],
 };
 
-/** 合并服务端 /categories 动态元数据与本地兜底主分类，避免重复或缺失项。 */
+/** 合并服务端 /categories 动态元数据与本地兜底主分类，按 slug 与 label 双重去重，并跳过搜索快捷项。 */
 export function resolveCategories(meta?: CategoriesMeta): CategoryOption[] {
   const map = new Map<string, string>();
+  const seenLabels = new Set<string>();
   for (const item of FALLBACK_CATEGORIES) {
     map.set(item.value, item.label);
+    seenLabels.add(item.label.toLowerCase());
   }
   for (const raw of meta?.categories || []) {
+    if (raw.type === 'search') continue;
     const slug = String(raw.slug ?? '').trim();
     const id = String(raw.id ?? '').trim();
     const value = slug || id || '0';
     const label = String(raw.name ?? raw.title ?? '').trim();
     if (!value || !label) continue;
-    // 已有中文标准命名时保留可读标签，新增未知分类再追加
-    if (!map.has(value)) {
+    if (!map.has(value) && !seenLabels.has(label.toLowerCase())) {
       map.set(value, label);
+      seenLabels.add(label.toLowerCase());
     }
   }
   return Array.from(map.entries()).map(([value, label]) => ({ value, label }));

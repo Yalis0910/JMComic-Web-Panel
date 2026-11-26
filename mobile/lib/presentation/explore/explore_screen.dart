@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
+import '../../data/sources/comic_data_source.dart';
 import '../detail/album_detail_screen.dart';
 import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
@@ -66,6 +67,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   String _query = '';
   int _page = 1;
   int _pageCount = 1;
+  int _pageSize = 80;
 
   List<CategoryOptionItem> _categories = CategoryMetaResult.fallbackCategories;
   Map<String, List<SubCategoryOptionItem>> _subCategoriesMap = CategoryMetaResult.fallbackSubCategories;
@@ -132,6 +134,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           setState(() {
             _items = res.albums;
             _pageCount = res.pageCount;
+            _pageSize = res.pageSize;
           });
         }
       } else if (_tab == 'filter') {
@@ -146,6 +149,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
           setState(() {
             _items = res.albums;
             _pageCount = res.pageCount;
+            _pageSize = res.pageSize;
           });
         }
       } else if (_tab == 'week') {
@@ -214,6 +218,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         setState(() {
           _items = res.albums;
           _pageCount = res.pageCount;
+          _pageSize = res.pageSize;
         });
       }
     } catch (e) {
@@ -254,8 +259,14 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final src = ref.watch(hybridControllerProvider.notifier).activeSource;
-    final webOnly = src.supportsWebOnlyFilters;
+    ref.listen<HybridState>(hybridControllerProvider, (prev, next) {
+      if (prev != null && prev.activeMode != next.activeMode) {
+        _loadCategoriesMeta();
+        _loadActiveTab();
+      }
+    });
+    final activeMode = ref.watch(hybridControllerProvider.select((s) => s.activeMode));
+    final webOnly = activeMode == ActiveMode.lanServer;
     final crossCount = MediaQuery.of(context).size.width >= 680 ? 3 : 2;
     final subCats = webOnly ? (_subCategoriesMap[_category] ?? const <SubCategoryOptionItem>[]) : const <SubCategoryOptionItem>[];
 
@@ -681,7 +692,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     ),
                     Text('第 $_page 页'),
                     CupertinoButton(
-                      onPressed: _forumItems.isEmpty
+                      onPressed: _forumItems.length < 10
                           ? null
                           : () {
                               setState(() => _page++);
@@ -708,7 +719,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     final a = _items[idx];
                     return ModernComicCard(
                       album: a,
-                      rank: (_query.isEmpty && _tab == 'ranking') ? (_page - 1) * 20 + idx + 1 : null,
+                      rank: (_query.isEmpty && _tab == 'ranking') ? (_page - 1) * _pageSize + idx + 1 : null,
                       onTap: () => Navigator.of(context).push(
                         CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: a.albumId)),
                       ),

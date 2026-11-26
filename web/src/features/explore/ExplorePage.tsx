@@ -335,11 +335,16 @@ export function ExplorePage() {
               上一页
             </button>
             <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
-              第 {page} 页
+              {forumQuery.data?.page_count && forumQuery.data.page_count > 1
+                ? `第 ${page} / ${forumQuery.data.page_count} 页`
+                : `第 ${page} 页`}
             </span>
             <button
               type="button"
-              disabled={(forumQuery.data?.comments.length || 0) === 0}
+              disabled={
+                (forumQuery.data?.comments.length || 0) === 0 ||
+                (!!forumQuery.data?.page_count && page >= forumQuery.data.page_count)
+              }
               onClick={() => setPage((p) => p + 1)}
               className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
               style={{

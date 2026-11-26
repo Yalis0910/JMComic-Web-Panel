@@ -392,48 +392,84 @@ class JMProtocolAdapter:
         client = self.get_api_client()
         resp = client.req_api("/categories")
         data = resp.res_data if isinstance(resp.res_data, dict) else {}
-        sub_categories = {
+        sub_categories: Dict[str, List[Dict[str, str]]] = {
             "doujin": [
                 {"slug": JmMagicConstants.SUB_DOUJIN_CHINESE, "name": "汉化"},
                 {"slug": JmMagicConstants.SUB_DOUJIN_JAPANESE, "name": "日语"},
                 {"slug": JmMagicConstants.SUB_DOUJIN_CG, "name": "CG"},
+                {"slug": "no_mosaic", "name": "去码"},
+                {"slug": "coloring", "name": "上色"},
             ],
             "single": [
                 {"slug": JmMagicConstants.SUB_SINGLE_CHINESE, "name": "汉化"},
                 {"slug": JmMagicConstants.SUB_SINGLE_JAPANESE, "name": "日语"},
                 {"slug": JmMagicConstants.SUB_SINGLE_YOUTH, "name": "青年"},
+                {"slug": "no_mosaic", "name": "去码"},
+                {"slug": "coloring", "name": "上色"},
             ],
             "short": [
                 {"slug": JmMagicConstants.SUB_SHORT_CHINESE, "name": "汉化"},
                 {"slug": JmMagicConstants.SUB_SHORT_JAPANESE, "name": "日语"},
+                {"slug": "no_mosaic", "name": "去码"},
+                {"slug": "coloring", "name": "上色"},
             ],
             "another": [
                 {"slug": JmMagicConstants.SUB_ANOTHER_OTHER, "name": "其他"},
                 {"slug": JmMagicConstants.SUB_ANOTHER_3D, "name": "3D"},
                 {"slug": JmMagicConstants.SUB_ANOTHER_COSPLAY, "name": "Cosplay"},
             ],
+            "hanman": [
+                {"slug": JmMagicConstants.SUB_CHINESE, "name": "汉化"},
+            ],
         }
+        raw_cats = []
+        for c in data.get("categories", []) or []:
+            if not isinstance(c, dict):
+                continue
+            # type == "search" 为 APP 端搜索快捷词（如 another_cosplay / 3D），非 /categories/filter 分类
+            if c.get("type") == "search":
+                continue
+            raw_cats.append(c)
         return {
-            "categories": data.get("categories", []),
+            "categories": raw_cats,
             "blocks": data.get("blocks", []),
             "sub_categories": sub_categories,
         }
 
     def get_ranking(self, ranking_type: str, page: int = 1, category: str = "0") -> Dict[str, Any]:
-        client = self.get_client()
         cat = "0" if category == "ALL" else category
+        sub_cat: Optional[str] = None
+        if cat == "3D":
+            cat, sub_cat = "another", "3d"
+        elif cat == "another_cosplay":
+            cat = JmMagicConstants.CATEGORY_DOUJIN_COSPLAY
+
+        client = self.get_html_client() if sub_cat else self.get_client()
         if ranking_type == "day":
-            res = client.day_ranking(page=page, category=cat)
+            res = (
+                client.categories_filter(page, JmMagicConstants.TIME_TODAY, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                if sub_cat
+                else client.day_ranking(page=page, category=cat)
+            )
         elif ranking_type == "week":
-            res = client.week_ranking(page=page, category=cat)
+            res = (
+                client.categories_filter(page, JmMagicConstants.TIME_WEEK, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                if sub_cat
+                else client.week_ranking(page=page, category=cat)
+            )
         elif ranking_type == "month":
-            res = client.month_ranking(page=page, category=cat)
+            res = (
+                client.categories_filter(page, JmMagicConstants.TIME_MONTH, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                if sub_cat
+                else client.month_ranking(page=page, category=cat)
+            )
         elif ranking_type == "all":
             res = client.categories_filter(
                 page=page,
                 time=JmMagicConstants.TIME_ALL,
                 category=cat,
                 order_by=JmMagicConstants.ORDER_BY_VIEW,
+                sub_category=sub_cat,
             )
         elif ranking_type == "likes":
             res = client.categories_filter(
@@ -441,6 +477,7 @@ class JMProtocolAdapter:
                 time=JmMagicConstants.TIME_ALL,
                 category=cat,
                 order_by=JmMagicConstants.ORDER_BY_LIKE,
+                sub_category=sub_cat,
             )
         elif ranking_type == "latest":
             res = client.categories_filter(
@@ -448,6 +485,7 @@ class JMProtocolAdapter:
                 time=JmMagicConstants.TIME_ALL,
                 category=cat,
                 order_by=JmMagicConstants.ORDER_BY_LATEST,
+                sub_category=sub_cat,
             )
         else:
             raise ValueError(f"不支持的排行类型: {ranking_type}")
@@ -461,20 +499,25 @@ class JMProtocolAdapter:
         order_by: str = "mv",
         sub_category: Optional[str] = None,
     ) -> Dict[str, Any]:
+        cat = "0" if category == "ALL" else category
+        sub_cat = sub_category
+        if cat == "3D" and not sub_cat:
+            cat, sub_cat = "another", "3d"
+        elif cat == "another_cosplay":
+            cat = JmMagicConstants.CATEGORY_DOUJIN_COSPLAY
         # 副分类、评分(tr)与评论数(md)排序仅网页端支持，自动切换 HTML 客户端
-        use_html = bool(sub_category) or order_by in (
+        use_html = bool(sub_cat) or order_by in (
             JmMagicConstants.ORDER_BY_SCORE,
             JmMagicConstants.ORDER_BY_COMMENT,
         )
         client = self.get_html_client() if use_html else self.get_client()
-        cat = "0" if category == "ALL" else category
         t = JmMagicConstants.TIME_ALL if time_range in ("ALL", "", "a") else time_range
         res = client.categories_filter(
             page=page,
             time=t,
             category=cat,
             order_by=order_by,
-            sub_category=sub_category,
+            sub_category=sub_cat,
         )
         return _format_page_albums(res)
 

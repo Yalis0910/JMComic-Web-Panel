@@ -295,8 +295,9 @@ class DirectJmSource implements ComicDataSource {
     final list = (data['content'] as List?) ?? const [];
     final albums = list.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
     final total = parseJsonInt(data['total'], albums.length);
-    final pageCount = max(1, (total / 20).ceil());
-    return PagedComicsResult(albums: albums, total: total, pageCount: pageCount);
+    const pageSize = 80;
+    final pageCount = max(1, (total / pageSize).ceil());
+    return PagedComicsResult(albums: albums, total: total, pageCount: pageCount, pageSize: pageSize);
   }
 
   @override
@@ -327,14 +328,18 @@ class DirectJmSource implements ComicDataSource {
     final catMap = <String, String>{
       for (final c in CategoryMetaResult.fallbackCategories) c.value: c.label,
     };
+    final seenLabels = <String>{
+      for (final c in CategoryMetaResult.fallbackCategories) c.label.toLowerCase(),
+    };
     for (final item in (d['categories'] as List?) ?? const []) {
       if (item is! Map) continue;
       final m = Map<String, dynamic>.from(item);
+      if ('${m['type'] ?? ''}' == 'search') continue;
       final slug = '${m['slug'] ?? ''}'.trim();
       final id = '${m['id'] ?? ''}'.trim();
       final val = slug.isNotEmpty ? slug : id;
       final label = '${m['name'] ?? m['title'] ?? ''}'.trim();
-      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val)) {
+      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val) && seenLabels.add(label.toLowerCase())) {
         catMap[val] = label;
       }
     }

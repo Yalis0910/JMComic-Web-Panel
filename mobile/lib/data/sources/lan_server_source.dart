@@ -60,6 +60,7 @@ class LanServerSource implements ComicDataSource {
       albums: list.map((a) => _parseSummary(Map<String, dynamic>.from(a))).toList(),
       total: parseJsonInt(d['total'], list.length),
       pageCount: max(1, parseJsonInt(d['page_count'], 1)),
+      pageSize: max(1, parseJsonInt(d['page_size'], 80)),
     );
   }
 
@@ -114,12 +115,16 @@ class LanServerSource implements ComicDataSource {
     final catMap = <String, String>{
       for (final c in CategoryMetaResult.fallbackCategories) c.value: c.label,
     };
+    final seenLabels = <String>{
+      for (final c in CategoryMetaResult.fallbackCategories) c.label.toLowerCase(),
+    };
     for (final raw in (d['categories'] as List?) ?? const []) {
       if (raw is! Map) continue;
       final m = Map<String, dynamic>.from(raw);
+      if ('${m['type'] ?? ''}' == 'search') continue;
       final val = '${m['slug'] ?? ''}'.trim().isNotEmpty ? '${m['slug']}'.trim() : '${m['id'] ?? ''}'.trim();
       final label = '${m['name'] ?? m['title'] ?? ''}'.trim();
-      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val)) {
+      if (val.isNotEmpty && label.isNotEmpty && !catMap.containsKey(val) && seenLabels.add(label.toLowerCase())) {
         catMap[val] = label;
       }
     }

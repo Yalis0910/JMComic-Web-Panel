@@ -38,11 +38,14 @@ jobs:
       - uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-      - name: Bootstrap Android runner & configure network permissions
+      - name: Bootstrap Android runner
+        working-directory: mobile
         run: |
-          cd mobile
           flutter create . --platforms=android --project-name jmcomic_panel_app --org com.jmcomic.panel
           rm -f test/widget_test.dart
+      - name: Configure AndroidManifest network permissions
+        working-directory: mobile
+        run: |
           python3 -c '
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
@@ -53,10 +56,18 @@ jobs:
               text = text.replace("<application", "<application\n        android:usesCleartextTraffic=\"true\"", 1)
           manifest.write_text(text, encoding="utf-8")
           '
-          flutter pub get
-          flutter analyze
-          flutter test
-          flutter build apk --release
+      - name: Install Flutter packages
+        working-directory: mobile
+        run: flutter pub get
+      - name: Analyze Dart code
+        working-directory: mobile
+        run: flutter analyze
+      - name: Run Flutter unit tests
+        working-directory: mobile
+        run: flutter test
+      - name: Build Android Release APK
+        working-directory: mobile
+        run: flutter build apk --release
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:

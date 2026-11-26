@@ -67,7 +67,7 @@ cd web && npm run build
 
 ```bash
 cd mobile
-flutter create . --platforms=android,ios --project-name jmlis --org com.jmlis.app
+flutter create . --platforms=android --project-name jmlis --org com.jmlis.app
 flutter pub get
 dart run flutter_launcher_icons
 flutter analyze

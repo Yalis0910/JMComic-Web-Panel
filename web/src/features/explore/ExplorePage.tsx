@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { ComicCard } from '../../components/ios/ComicCard';
-import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/ios/IosControls';
+import { ComicCard } from '../../components/liquid/ComicCard';
+import { LiquidGlass } from '../../components/liquid/LiquidGlass';
+import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 
 const CATEGORIES = [
   { value: '0', label: '全部' },
@@ -59,13 +60,15 @@ export function ExplorePage() {
   const pageSize = activeData?.page_size || 20;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+    <div className="space-y-7">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+          <p className="text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--liquid-accent)' }}>
             CHARTS &amp; GENRES
           </p>
-          <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">排行与分类</h1>
+          <h1 className="text-[32px] sm:text-[38px] font-medium tracking-[-0.03em] leading-[1.12]">
+            排行与分类
+          </h1>
         </div>
         <SegmentedControl
           value={tab}
@@ -81,8 +84,9 @@ export function ExplorePage() {
         />
       </div>
 
+      {/* Tinted Glass 筛选控制栏 */}
       {tab === 'ranking' && (
-        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
+        <LiquidGlass variant="tinted" radius={24} className="p-4 flex flex-wrap items-center gap-3">
           <SegmentedControl
             value={rankType}
             onChange={(v) => {
@@ -96,29 +100,33 @@ export function ExplorePage() {
             ]}
           />
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => {
-                  setCategory(c.value);
-                  setPage(1);
-                }}
-                className="px-3.5 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 transition-all"
-                style={{
-                  backgroundColor: category === c.value ? 'var(--ios-blue)' : 'var(--ios-fill-tertiary)',
-                  color: category === c.value ? '#ffffff' : 'var(--ios-label-primary)',
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
+            {CATEGORIES.map((c) => {
+              const active = category === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => {
+                    setCategory(c.value);
+                    setPage(1);
+                  }}
+                  className="min-h-[38px] px-4 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 liquid-tactile liquid-focus-ring"
+                  style={{
+                    backgroundColor: active ? 'var(--liquid-scene)' : 'var(--liquid-solid)',
+                    color: active ? '#ffffff' : 'var(--liquid-ink)',
+                    border: active ? '1px solid transparent' : '1px solid var(--liquid-separator)',
+                  }}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </LiquidGlass>
       )}
 
       {tab === 'filter' && (
-        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
+        <LiquidGlass variant="tinted" radius={24} className="p-4 flex flex-wrap items-center gap-3">
           <SegmentedControl
             value={orderBy}
             onChange={(v) => {
@@ -146,55 +154,65 @@ export function ExplorePage() {
             ]}
           />
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full pt-1">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => {
-                  setCategory(c.value);
-                  setPage(1);
-                }}
-                className="px-3.5 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 transition-all"
-                style={{
-                  backgroundColor: category === c.value ? 'var(--ios-blue)' : 'var(--ios-fill-tertiary)',
-                  color: category === c.value ? '#ffffff' : 'var(--ios-label-primary)',
-                }}
-              >
-                {c.label}
-              </button>
-            ))}
+            {CATEGORIES.map((c) => {
+              const active = category === c.value;
+              return (
+                <button
+                  key={c.value}
+                  type="button"
+                  onClick={() => {
+                    setCategory(c.value);
+                    setPage(1);
+                  }}
+                  className="min-h-[38px] px-4 py-1.5 rounded-full text-[13px] font-medium cursor-pointer shrink-0 liquid-tactile liquid-focus-ring"
+                  style={{
+                    backgroundColor: active ? 'var(--liquid-scene)' : 'var(--liquid-solid)',
+                    color: active ? '#ffffff' : 'var(--liquid-ink)',
+                    border: active ? '1px solid transparent' : '1px solid var(--liquid-separator)',
+                  }}
+                >
+                  {c.label}
+                </button>
+              );
+            })}
           </div>
-        </div>
+        </LiquidGlass>
       )}
 
       {tab === 'week' && weekMetaQuery.data && (
-        <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
+        <LiquidGlass variant="tinted" radius={24} className="p-4 flex flex-wrap items-center gap-3">
           <PillSelect
             value={activeWeekId}
             onChange={setWeekCatId}
-            options={weekMetaQuery.data.categories.map((c) => ({ value: c.id, label: c.title }))}
+            options={weekMetaQuery.data.categories.map((c) => ({
+              value: c.id,
+              label: c.title || c.time || `第${c.id}期`,
+            }))}
           />
           <SegmentedControl
             value={weekTypeId}
             onChange={setWeekTypeId}
             options={
               weekMetaQuery.data.types.length > 0
-                ? weekMetaQuery.data.types.map((t) => ({ value: t.id, label: t.title }))
-                : [{ value: 'manga', label: '漫画' }]
+                ? weekMetaQuery.data.types.map((t) => ({
+                    value: t.id,
+                    label: t.title || (t.id === 'hanman' ? '韩漫' : t.id),
+                  }))
+                : [{ value: 'manga', label: '日漫' }]
             }
           />
-        </div>
+        </LiquidGlass>
       )}
 
       {isLoading ? (
         <SkeletonCardGrid count={10} />
       ) : error ? (
-        <div className="ios-card p-8 text-center text-[14px]" style={{ color: 'var(--ios-red)' }}>
+        <div className="liquid-solid-card p-8 text-center text-[14px]" style={{ color: 'var(--liquid-danger)' }}>
           加载失败：{(error as Error).message}
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
             {albums.map((a, idx) => (
               <ComicCard
                 key={a.album_id}
@@ -205,32 +223,32 @@ export function ExplorePage() {
           </div>
 
           {tab !== 'week' && activeData && activeData.page_count > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-3 pt-3">
               <button
                 type="button"
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
-                  backgroundColor: 'var(--ios-bg-secondary)',
-                  border: '1px solid var(--ios-separator)',
-                  boxShadow: 'var(--ios-shadow-sm)',
+                  backgroundColor: 'var(--liquid-solid)',
+                  border: '1px solid var(--liquid-separator)',
+                  boxShadow: 'var(--liquid-shadow-card)',
                 }}
               >
                 上一页
               </button>
-              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--ios-label-secondary)' }}>
+              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
                 第 {page} / {activeData.page_count} 页
               </span>
               <button
                 type="button"
                 disabled={page >= activeData.page_count}
                 onClick={() => setPage((p) => p + 1)}
-                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
-                  backgroundColor: 'var(--ios-bg-secondary)',
-                  border: '1px solid var(--ios-separator)',
-                  boxShadow: 'var(--ios-shadow-sm)',
+                  backgroundColor: 'var(--liquid-solid)',
+                  border: '1px solid var(--liquid-separator)',
+                  boxShadow: 'var(--liquid-shadow-card)',
                 }}
               >
                 下一页

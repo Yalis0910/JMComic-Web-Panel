@@ -512,18 +512,23 @@ class DirectJmSource implements ComicDataSource {
       throw Exception('未登录 JM 账号');
     }
 
-    dynamic data;
-    try {
-      data = await _reqApi(
-        '/favorite',
-        query: {'page': page, 'folder_id': folderId, 'o': orderBy},
-      );
-    } catch (e) {
-      if (await _trySilentRelogin()) {
-        data = await _reqApi(
+    var relogged = false;
+    if ((_cookies['AVS'] ?? '').isEmpty) {
+      relogged = await _trySilentRelogin();
+    }
+
+    Future<dynamic> fetch() => _reqApi(
           '/favorite',
           query: {'page': page, 'folder_id': folderId, 'o': orderBy},
         );
+
+    dynamic data;
+    try {
+      data = await fetch();
+    } catch (e) {
+      if (!relogged && await _trySilentRelogin()) {
+        relogged = true;
+        data = await fetch();
       } else {
         rethrow;
       }
@@ -532,17 +537,42 @@ class DirectJmSource implements ComicDataSource {
     if (data is! Map) {
       return const FavoritePageResult();
     }
-    final map = Map<String, dynamic>.from(data);
+    var map = Map<String, dynamic>.from(data);
+    var parsed = _parseFavoriteMap(map);
+    if (!relogged &&
+        parsed.albums.isEmpty &&
+        parsed.folders.isEmpty &&
+        _account.favoritesCount > 0 &&
+        await _trySilentRelogin()) {
+      final retryData = await fetch();
+      if (retryData is Map) {
+        map = Map<String, dynamic>.from(retryData);
+        parsed = _parseFavoriteMap(map);
+      }
+    }
+    return parsed;
+  }
+
+  FavoritePageResult _parseFavoriteMap(Map<String, dynamic> map) {
     final list = (map['list'] as List?) ?? const [];
     final albums = list.map((a) => _parseRawAlbum(Map<String, dynamic>.from(a))).toList();
-    final foldersRaw = (map['folder_list'] as List?) ?? const [];
-    final folders = foldersRaw.map((f) {
+
+    final rawFolders = map['folder_list'];
+    final Iterable<dynamic> folderItems = switch (rawFolders) {
+      List l => l,
+      Map m => m.values,
+      _ => const [],
+    };
+    final folders = <FavoriteFolder>[];
+    for (final f in folderItems) {
+      if (f is! Map) continue;
       final fm = Map<String, dynamic>.from(f);
-      return FavoriteFolder(
-        folderId: '${fm['FID'] ?? fm['0'] ?? ''}',
-        name: '${fm['name'] ?? fm['2'] ?? ''}',
-      );
-    }).toList();
+      final fid = '${fm['FID'] ?? fm['fid'] ?? fm['id'] ?? fm['0'] ?? ''}'.trim();
+      final name = '${fm['name'] ?? fm['folder_name'] ?? fm['2'] ?? ''}'.trim();
+      if (fid.isNotEmpty && name.isNotEmpty) {
+        folders.add(FavoriteFolder(folderId: fid, name: name));
+      }
+    }
 
     final total = int.tryParse('${map['total'] ?? albums.length}') ?? albums.length;
     final count = int.tryParse('${map['count'] ?? 20}') ?? 20;

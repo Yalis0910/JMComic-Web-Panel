@@ -186,7 +186,7 @@ export const api = {
 
   getPromote: (page = 1) => request<{ sections: { id: string; title: string; slug: string; type: string; albums: AlbumSummary[] }[] }>(`/discovery/promote?page=${page}`),
   getLatest: (page = 1) => request<{ albums: AlbumSummary[]; page: number }>(`/discovery/latest?page=${page}`),
-  getWeekMeta: () => request<{ categories: { id: string; title: string }[]; types: { id: string; title: string }[] }>('/discovery/week'),
+  getWeekMeta: () => request<{ categories: { id: string; title: string; time?: string }[]; types: { id: string; title: string }[] }>('/discovery/week'),
   getWeekFilter: (categoryId: string, typeId = 'manga') => request<{ albums: AlbumSummary[]; total: number }>(`/discovery/week/filter?category_id=${encodeURIComponent(categoryId)}&type_id=${encodeURIComponent(typeId)}`),
   getRanking: (type: 'day' | 'week' | 'month', page = 1, category = '0') => request<PageResult>(`/discovery/ranking/${type}?page=${page}&category=${encodeURIComponent(category)}`),
   getCategoryFilter: (params: { page?: number; time?: string; order_by?: string; category?: string; sub_category?: string }) => {

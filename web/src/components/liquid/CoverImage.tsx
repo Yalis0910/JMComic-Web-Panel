@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, RotateCw } from 'lucide-react';
+import { BookOpen, EyeOff, RotateCw } from 'lucide-react';
 import { withPanelToken } from '../../api/client';
+import { useAppStore } from '../../stores/useAppStore';
 
 export function CoverImage({
   src,
@@ -17,13 +18,31 @@ export function CoverImage({
   loading?: 'lazy' | 'eager';
   allowRetry?: boolean;
 }) {
+  const showCovers = useAppStore((s) => s.showCovers);
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error');
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     setStatus(src ? 'loading' : 'error');
     setAttempt(0);
-  }, [src]);
+  }, [src, showCovers]);
+
+  if (!showCovers) {
+    return (
+      <div className={`relative w-full h-full overflow-hidden ${className}`}>
+        <div
+          className="h-full w-full flex flex-col items-center justify-center gap-1.5 px-3 text-center"
+          style={{
+            backgroundColor: 'var(--liquid-fill-soft)',
+            color: 'var(--liquid-muted)',
+          }}
+        >
+          <EyeOff className="w-5 h-5 opacity-55" />
+          <span className="text-[11px] font-medium opacity-80">封面已隐藏</span>
+        </div>
+      </div>
+    );
+  }
 
   const tokenized = src ? withPanelToken(src) : '';
   const effectiveSrc =
@@ -51,12 +70,11 @@ export function CoverImage({
         <div
           className="h-full w-full flex flex-col items-center justify-center gap-2 px-3 text-center"
           style={{
-            background:
-              'linear-gradient(155deg, rgba(79,70,229,0.12) 0%, rgba(236,72,153,0.08) 100%)',
-            color: 'var(--ios-label-secondary)',
+            background: 'linear-gradient(155deg, rgba(37, 65, 74, 0.14) 0%, rgba(199, 228, 229, 0.18) 100%)',
+            color: 'var(--liquid-muted)',
           }}
         >
-          <BookOpen className="w-6 h-6 opacity-45" />
+          <BookOpen className="w-6 h-6 opacity-50" />
           <span className="text-[11px] font-medium line-clamp-2 leading-snug">
             {fallbackTitle || alt || '暂无封面'}
           </span>
@@ -69,11 +87,11 @@ export function CoverImage({
                 setStatus('loading');
                 setAttempt((a) => a + 1);
               }}
-              className="mt-0.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium cursor-pointer"
+              className="mt-0.5 inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-medium cursor-pointer liquid-tactile"
               style={{
-                backgroundColor: 'var(--ios-bg-secondary)',
-                border: '1px solid var(--ios-separator)',
-                color: 'var(--ios-blue)',
+                backgroundColor: 'var(--liquid-solid)',
+                border: '1px solid var(--liquid-separator)',
+                color: 'var(--liquid-accent)',
               }}
             >
               <RotateCw className="w-3 h-3" /> 重试

@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import { api, withPanelToken } from '../../api/client';
 import { useAppStore, type ReaderMode } from '../../stores/useAppStore';
-import { BottomSheet, InsetGroup, InsetRow, IosSwitch, SegmentedControl } from '../../components/ios/IosControls';
+import { BottomSheet, InsetGroup, InsetRow, LiquidSwitch, SegmentedControl } from '../../components/liquid/LiquidControls';
+import { LiquidGlass } from '../../components/liquid/LiquidGlass';
 
 interface PageItem {
   index: number;
@@ -55,7 +56,7 @@ function ComicImage({
   return (
     <div ref={imgRef} className={`relative flex items-center justify-center min-h-[260px] ${className}`}>
       {status === 'loading' && (
-        <div className="absolute inset-0 flex items-center justify-center text-white/50 text-[13px]">
+        <div className="absolute inset-0 flex items-center justify-center text-white/55 text-[13px]">
           加载中...
         </div>
       )}
@@ -67,7 +68,7 @@ function ComicImage({
             setStatus('loading');
             setAttempt((a) => a + 1);
           }}
-          className="px-4 py-2 rounded-full bg-white/15 text-white text-[13px] inline-flex items-center gap-1.5 cursor-pointer"
+          className="min-h-[42px] px-4 py-2 rounded-full bg-white/15 text-white text-[13px] inline-flex items-center gap-1.5 cursor-pointer liquid-tactile"
         >
           <RotateCw className="w-3.5 h-3.5" /> 加载失败，点击重试
         </button>
@@ -170,7 +171,6 @@ export function ReaderPage() {
   const prevEp = epIndex > 0 ? chapters[epIndex - 1] : null;
   const nextEp = epIndex >= 0 && epIndex < chapters.length - 1 ? chapters[epIndex + 1] : null;
 
-  // 预加载后续 N 页图片到浏览器缓存
   useEffect(() => {
     if (!pages.length) return;
     const end = Math.min(pages.length, currentIndex + preloadCount + 1);
@@ -180,7 +180,6 @@ export function ReaderPage() {
     }
   }, [currentIndex, pages, preloadCount]);
 
-  // 节流同步阅读进度到 SQLite 服务端
   useEffect(() => {
     if (!albumId || !photoId || !pages.length || source !== 'online') return;
     const timer = setTimeout(() => {
@@ -269,55 +268,63 @@ export function ReaderPage() {
   const isLoading = source === 'local' ? localChapterQuery.isLoading : onlinePhotoQuery.isLoading;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black text-white flex flex-col overflow-hidden">
-      {/* iOS 磨砂顶部控制栏 */}
+    <div className="fixed inset-0 z-50 bg-[#080d10] text-white flex flex-col overflow-hidden">
+      {/* 悬浮 Liquid Glass 顶部胶囊 HUD */}
       <header
-        className={`fixed top-0 inset-x-0 z-30 transition-transform duration-300 ios-spring backdrop-blur-xl bg-black/70 border-b border-white/10 px-4 h-14 flex items-center justify-between gap-3 ${
-          hudVisible ? 'translate-y-0' : '-translate-y-full'
+        className={`fixed top-3 inset-x-0 z-30 px-3 sm:px-6 pointer-events-none transition-all duration-400 ${
+          hudVisible ? 'translate-y-0 opacity-100' : '-translate-y-24 opacity-0'
         }`}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.26, 1.55, 0.52, 1)' }}
       >
-        <button
-          type="button"
-          onClick={() => navigate(-1)}
-          className="inline-flex items-center gap-1 text-[15px] font-medium text-[#0a84ff] cursor-pointer shrink-0"
-        >
-          <ChevronLeft className="w-5 h-5" /> 返回
-        </button>
+        <div className="max-w-3xl mx-auto pointer-events-auto">
+          <LiquidGlass variant="clear" tone="dark" radius={999} bezelWidth={16} refraction={14} className="px-3 py-1.5">
+            <div className="flex items-center justify-between gap-2 min-h-[44px]">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="min-h-[38px] px-3 rounded-full inline-flex items-center gap-1 text-[14px] font-medium text-[#C7E4E5] cursor-pointer shrink-0 liquid-tactile liquid-focus-ring"
+                style={{ backgroundColor: 'rgba(255,255,255,0.10)' }}
+              >
+                <ChevronLeft className="w-4 h-4" /> 返回
+              </button>
 
-        <div className="min-w-0 text-center flex-1">
-          <div className="text-[14px] font-semibold truncate">{title}</div>
-          <div className="text-[11px] text-white/60 tabular-nums">
-            {pages.length ? `${currentIndex + 1} / ${pages.length}` : '加载中'}
-          </div>
-        </div>
+              <div className="min-w-0 text-center flex-1 px-2">
+                <div className="text-[13.5px] font-semibold truncate">{title}</div>
+                <div className="text-[11px] text-white/65 tabular-nums">
+                  {pages.length ? `${currentIndex + 1} / ${pages.length}` : '加载中'}
+                </div>
+              </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          {showThumbStrip && (
-            <button
-              type="button"
-              onClick={() => setThumbsOpen(true)}
-              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center cursor-pointer"
-              title="目录与缩略图"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center cursor-pointer"
-            title="阅读设置"
-          >
-            <SlidersHorizontal className="w-4 h-4" />
-          </button>
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="hidden sm:flex w-8 h-8 rounded-full bg-white/10 items-center justify-center cursor-pointer"
-            title="全屏"
-          >
-            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-          </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {showThumbStrip && (
+                  <button
+                    type="button"
+                    onClick={() => setThumbsOpen(true)}
+                    className="w-9 h-9 rounded-full bg-white/12 flex items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
+                    title="目录与缩略图"
+                  >
+                    <Layers className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="w-9 h-9 rounded-full bg-white/12 flex items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
+                  title="阅读设置"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleFullscreen}
+                  className="hidden sm:flex w-9 h-9 rounded-full bg-white/12 items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
+                  title="全屏"
+                >
+                  {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+          </LiquidGlass>
         </div>
       </header>
 
@@ -332,7 +339,7 @@ export function ReaderPage() {
           </div>
         ) : readerMode === 'vertical' ? (
           <div
-            className="mx-auto flex flex-col items-center py-16"
+            className="mx-auto flex flex-col items-center py-20"
             style={{
               maxWidth: fitWidth ? '920px' : 'none',
               gap: `${pageGap}px`,
@@ -361,14 +368,15 @@ export function ReaderPage() {
                   e.stopPropagation();
                   switchChapter(nextEp.id);
                 }}
-                className="mt-6 px-6 py-3 rounded-full bg-[#0a84ff] text-white text-[15px] font-semibold cursor-pointer"
+                className="mt-6 min-h-[46px] px-6 py-3 rounded-full text-[14.5px] font-semibold cursor-pointer liquid-tactile"
+                style={{ backgroundColor: '#E4EFEB', color: '#202929' }}
               >
                 继续阅读下一话：{nextEp.name} →
               </button>
             )}
           </div>
         ) : readerMode === 'double' ? (
-          <div className="h-full w-full flex items-center justify-center gap-2 px-2 py-14">
+          <div className="h-full w-full flex items-center justify-center gap-2 px-2 py-16">
             <ComicImage
               src={pages[currentIndex]?.url || ''}
               alt={`Page ${currentIndex + 1}`}
@@ -383,7 +391,7 @@ export function ReaderPage() {
             )}
           </div>
         ) : (
-          <div className="h-full w-full flex items-center justify-center px-2 py-14">
+          <div className="h-full w-full flex items-center justify-center px-2 py-16">
             <ComicImage
               src={pages[currentIndex]?.url || ''}
               alt={`Page ${currentIndex + 1}`}
@@ -393,62 +401,68 @@ export function ReaderPage() {
         )}
       </div>
 
-      {/* iOS 磨砂底部控制条 */}
+      {/* 悬浮 Liquid Glass 底部胶囊控制台 */}
       <footer
-        className={`fixed bottom-0 inset-x-0 z-30 transition-transform duration-300 ios-spring backdrop-blur-xl bg-black/75 border-t border-white/10 px-4 py-3 safe-bottom ${
-          hudVisible ? 'translate-y-0' : 'translate-y-full'
+        className={`fixed bottom-3 inset-x-0 z-30 px-3 sm:px-6 pb-[env(safe-area-inset-bottom)] pointer-events-none transition-all duration-400 ${
+          hudVisible ? 'translate-y-0 opacity-100' : 'translate-y-32 opacity-0'
         }`}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.26, 1.55, 0.52, 1)' }}
       >
-        <div className="max-w-3xl mx-auto space-y-2.5">
-          {pages.length > 1 && (
-            <div className="flex items-center gap-3">
-              <span className="text-[12px] text-white/70 tabular-nums w-10 text-right">
-                {currentIndex + 1}
-              </span>
-              <input
-                type="range"
-                min={0}
-                max={pages.length - 1}
-                value={currentIndex}
-                onChange={(e) => goToPage(Number(e.target.value))}
-                className="flex-1 accent-[#0a84ff]"
-              />
-              <span className="text-[12px] text-white/70 tabular-nums w-10">{pages.length}</span>
+        <div className="max-w-3xl mx-auto pointer-events-auto">
+          <LiquidGlass variant="clear" tone="dark" radius={28} bezelWidth={16} refraction={14} className="px-4 py-3">
+            <div className="space-y-2.5">
+              {pages.length > 1 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-[12px] text-white/75 tabular-nums w-9 text-right">
+                    {currentIndex + 1}
+                  </span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={pages.length - 1}
+                    value={currentIndex}
+                    onChange={(e) => goToPage(Number(e.target.value))}
+                    className="flex-1 accent-[#C7E4E5]"
+                  />
+                  <span className="text-[12px] text-white/75 tabular-nums w-9">{pages.length}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  disabled={!prevEp}
+                  onClick={() => prevEp && switchChapter(prevEp.id)}
+                  className="min-h-[38px] inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white/12 text-[13px] disabled:opacity-35 cursor-pointer liquid-tactile"
+                >
+                  <ChevronLeft className="w-4 h-4" /> 上一话
+                </button>
+
+                <div className="hidden sm:block">
+                  <SegmentedControl<ReaderMode>
+                    onDark
+                    value={readerMode}
+                    onChange={setReaderMode}
+                    options={[
+                      { value: 'vertical', label: '条漫' },
+                      { value: 'single-ltr', label: '左→右' },
+                      { value: 'single-rtl', label: '日漫' },
+                      { value: 'double', label: '双页' },
+                    ]}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  disabled={!nextEp}
+                  onClick={() => nextEp && switchChapter(nextEp.id)}
+                  className="min-h-[38px] inline-flex items-center gap-1 px-3.5 py-1.5 rounded-full bg-white/12 text-[13px] disabled:opacity-35 cursor-pointer liquid-tactile"
+                >
+                  下一话 <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-          )}
-
-          <div className="flex items-center justify-between gap-2">
-            <button
-              type="button"
-              disabled={!prevEp}
-              onClick={() => prevEp && switchChapter(prevEp.id)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 text-[13px] disabled:opacity-35 cursor-pointer"
-            >
-              <ChevronLeft className="w-4 h-4" /> 上一话
-            </button>
-
-            <div className="hidden sm:block">
-              <SegmentedControl<ReaderMode>
-                value={readerMode}
-                onChange={setReaderMode}
-                options={[
-                  { value: 'vertical', label: '条漫' },
-                  { value: 'single-ltr', label: '左→右' },
-                  { value: 'single-rtl', label: '日漫' },
-                  { value: 'double', label: '双页' },
-                ]}
-              />
-            </div>
-
-            <button
-              type="button"
-              disabled={!nextEp}
-              onClick={() => nextEp && switchChapter(nextEp.id)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white/10 text-[13px] disabled:opacity-35 cursor-pointer"
-            >
-              下一话 <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
+          </LiquidGlass>
         </div>
       </footer>
 
@@ -471,7 +485,7 @@ export function ReaderPage() {
                 />
               }
             />
-            <InsetRow label="宽度自适应" right={<IosSwitch checked={fitWidth} onChange={setFitWidth} />} />
+            <InsetRow label="宽度自适应" right={<LiquidSwitch checked={fitWidth} onChange={setFitWidth} />} />
             <InsetRow
               label="条漫页间距 (px)"
               right={
@@ -481,8 +495,8 @@ export function ReaderPage() {
                   max={40}
                   value={pageGap}
                   onChange={(e) => setPageGap(Number(e.target.value))}
-                  className="w-20 rounded-lg px-2 py-1 text-right text-[14px] outline-none"
-                  style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+                  className="w-20 rounded-full px-3 py-1 text-right text-[14px] outline-none"
+                  style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
                 />
               }
             />
@@ -496,8 +510,8 @@ export function ReaderPage() {
                   max={20}
                   value={preloadCount}
                   onChange={(e) => setPreloadCount(Number(e.target.value))}
-                  className="w-20 rounded-lg px-2 py-1 text-right text-[14px] outline-none"
-                  style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+                  className="w-20 rounded-full px-3 py-1 text-right text-[14px] outline-none"
+                  style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
                 />
               }
             />
@@ -521,7 +535,7 @@ export function ReaderPage() {
                   }}
                   right={
                     c.id === photoId ? (
-                      <span className="text-[12px] font-semibold" style={{ color: 'var(--ios-blue)' }}>
+                      <span className="text-[12px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
                         当前
                       </span>
                     ) : undefined
@@ -530,7 +544,7 @@ export function ReaderPage() {
               ))}
             </InsetGroup>
           )}
-          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+          <div className="grid grid-cols-4 sm:grid-cols-6 gap-2.5">
             {pages.map((p) => (
               <button
                 key={p.index}
@@ -539,13 +553,16 @@ export function ReaderPage() {
                   setThumbsOpen(false);
                   goToPage(p.index);
                 }}
-                className="aspect-[3/4] rounded-lg overflow-hidden relative cursor-pointer"
+                className="aspect-[3/4] rounded-[12px] overflow-hidden relative cursor-pointer liquid-tactile"
                 style={{
-                  border: p.index === currentIndex ? '2px solid var(--ios-blue)' : '0.5px solid var(--ios-separator)',
+                  border:
+                    p.index === currentIndex
+                      ? '2px solid var(--liquid-focus)'
+                      : '1px solid var(--liquid-separator)',
                 }}
               >
                 <img src={p.url} alt={`Thumb ${p.index + 1}`} loading="lazy" className="w-full h-full object-cover" />
-                <span className="absolute bottom-1 right-1 px-1.5 rounded bg-black/70 text-white text-[10px] tabular-nums">
+                <span className="absolute bottom-1 right-1 px-1.5 rounded-full bg-black/70 text-white text-[10px] tabular-nums">
                   {p.index + 1}
                 </span>
               </button>

@@ -7,33 +7,28 @@ import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
 import '../detail/album_detail_screen.dart';
-import '../reader/reader_screen.dart';
+import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
+import '../widgets/liquid_glass.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  final VoidCallback? onOpenExplore;
+
+  const HomeScreen({super.key, this.onOpenExplore});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final PageController _heroCtrl = PageController(viewportFraction: 0.92);
   List<({String title, List<ComicSummary> albums})> _sections = const [];
   bool _loading = true;
   String? _error;
-  int _heroPage = 0;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
-  }
-
-  @override
-  void dispose() {
-    _heroCtrl.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -65,213 +60,215 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final hybrid = ref.watch(hybridControllerProvider);
     final isLan = hybrid.activeMode == ActiveMode.lanServer;
     final modeText = isLan ? '局域网' : '直连';
-    final modeColor = isLan ? CupertinoColors.activeGreen : JmlisColors.accent(context);
-    final heroAlbums = _sections.isNotEmpty ? _sections.first.albums.take(6).toList() : const <ComicSummary>[];
+    final modeDot = isLan ? LiquidTokens.successDark : LiquidTokens.darkIce;
+    final featured = _sections.isNotEmpty && _sections.first.albums.isNotEmpty
+        ? _sections.first.albums.first
+        : null;
+    final crossCount = MediaQuery.of(context).size.width >= 680 ? 3 : 2;
 
     return CupertinoPageScaffold(
+      backgroundColor: LiquidTokens.canvas(context),
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          CupertinoSliverNavigationBar(
-            largeTitle: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset('assets/icon/app_icon.png', width: 26, height: 26),
-                ),
-                const SizedBox(width: 8),
-                const Text('JMlis'),
-              ],
-            ),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: () => ref.read(hybridControllerProvider.notifier).probeAndSwitch().then((_) => _load()),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: modeColor.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 6,
-                          height: 6,
-                          decoration: BoxDecoration(color: modeColor, shape: BoxShape.circle),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          modeText,
-                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: modeColor),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                GestureDetector(
-                  onTap: () {
-                    if (!hybrid.account.isLoggedIn) {
-                      showAccountLoginSheet(context, ref);
-                    }
-                  },
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: hybrid.account.isLoggedIn
-                          ? JmlisColors.accent(context)
-                          : JmlisColors.elevated(context),
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: hybrid.account.isLoggedIn
-                        ? Text(
-                            hybrid.account.username.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(color: CupertinoColors.white, fontSize: 12, fontWeight: FontWeight.w700),
-                          )
-                        : Icon(CupertinoIcons.person, size: 15, color: JmlisColors.secondaryText(context)),
-                  ),
-                ),
-              ],
-            ),
-          ),
           CupertinoSliverRefreshControl(onRefresh: _load),
-          if (heroAlbums.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Column(
+          // Deep Sea Scenic Header Stage with Floating Clear Glass Controls
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                16,
+                MediaQuery.of(context).padding.top + 12,
+                16,
+                8,
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(28),
+                child: Stack(
                   children: [
-                    SizedBox(
-                      height: 196,
-                      child: PageView.builder(
-                        controller: _heroCtrl,
-                        itemCount: heroAlbums.length,
-                        onPageChanged: (i) => setState(() => _heroPage = i),
-                        itemBuilder: (ctx, idx) {
-                          final a = heroAlbums[idx];
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 5),
-                            child: GestureDetector(
-                              onTap: () => Navigator.of(context).push(
-                                CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: a.albumId)),
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(20),
-                                child: Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    ModernCoverImage(
-                                      coverUrl: a.coverUrl,
-                                      fallbacks: a.coverFallbacks,
-                                      headers: a.coverHeaders,
-                                      borderRadius: 0,
-                                    ),
-                                    BackdropFilter(
-                                      filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-                                      child: Container(
-                                        color: CupertinoColors.black.withValues(alpha: 0.48),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.all(14),
-                                      child: Row(
-                                        children: [
-                                          SizedBox(
-                                            width: 112,
-                                            height: double.infinity,
-                                            child: ModernCoverImage(
-                                              coverUrl: a.coverUrl,
-                                              fallbacks: a.coverFallbacks,
-                                              headers: a.coverHeaders,
-                                              borderRadius: 12,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 14),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                                  decoration: BoxDecoration(
-                                                    color: JmlisColors.accent(ctx),
-                                                    borderRadius: BorderRadius.circular(999),
-                                                  ),
-                                                  child: Text(
-                                                    '精选焦点 · JM${a.albumId}',
-                                                    style: const TextStyle(
-                                                      color: CupertinoColors.white,
-                                                      fontSize: 10.5,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
-                                                Text(
-                                                  a.title,
-                                                  maxLines: 3,
-                                                  overflow: TextOverflow.ellipsis,
-                                                  style: const TextStyle(
-                                                    color: CupertinoColors.white,
-                                                    fontSize: 16,
-                                                    fontWeight: FontWeight.w700,
-                                                    height: 1.25,
-                                                  ),
-                                                ),
-                                                if (a.author.isNotEmpty) ...[
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    a.author,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: TextStyle(
-                                                      color: CupertinoColors.white.withValues(alpha: 0.78),
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: List.generate(
-                        heroAlbums.length,
-                        (i) => AnimatedContainer(
-                          duration: const Duration(milliseconds: 220),
-                          margin: const EdgeInsets.symmetric(horizontal: 3),
-                          width: i == _heroPage ? 16 : 6,
-                          height: 6,
-                          decoration: BoxDecoration(
-                            color: i == _heroPage ? JmlisColors.accent(context) : JmlisColors.border(context),
-                            borderRadius: BorderRadius.circular(999),
+                    Positioned.fill(
+                      child: Container(
+                        decoration: const BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              LiquidTokens.lightSceneDeep,
+                              LiquidTokens.lightScene,
+                              Color(0xFF335761),
+                            ],
                           ),
                         ),
+                      ),
+                    ),
+                    if (hybrid.settings.showCovers && featured != null && featured.coverUrl.isNotEmpty)
+                      Positioned.fill(
+                        child: Opacity(
+                          opacity: 0.24,
+                          child: ImageFiltered(
+                            imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                            child: ModernCoverImage(
+                              coverUrl: featured.coverUrl,
+                              fallbacks: featured.coverFallbacks,
+                              headers: featured.coverHeaders,
+                              borderRadius: 0,
+                            ),
+                          ),
+                        ),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: Image.asset('assets/icon/app_icon.png', width: 32, height: 32),
+                              ),
+                              const SizedBox(width: 10),
+                              const Expanded(
+                                child: Text(
+                                  'JMlis',
+                                  style: TextStyle(
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.5,
+                                    color: CupertinoColors.white,
+                                  ),
+                                ),
+                              ),
+                              LiquidSpringControl(
+                                onTap: () => ref
+                                    .read(hybridControllerProvider.notifier)
+                                    .probeAndSwitch()
+                                    .then((_) => _load()),
+                                child: LiquidGlassSurface(
+                                  variant: LiquidGlassVariant.clear,
+                                  onDarkScene: true,
+                                  borderRadius: 999,
+                                  padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: BoxDecoration(color: modeDot, shape: BoxShape.circle),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        modeText,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: CupertinoColors.white,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              LiquidSpringControl(
+                                onTap: () {
+                                  if (!hybrid.account.isLoggedIn) {
+                                    showAccountLoginSheet(context, ref);
+                                  }
+                                },
+                                child: LiquidGlassSurface(
+                                  variant: LiquidGlassVariant.clear,
+                                  onDarkScene: true,
+                                  borderRadius: 999,
+                                  padding: const EdgeInsets.all(6),
+                                  child: SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: Center(
+                                      child: hybrid.account.isLoggedIn
+                                          ? Text(
+                                              hybrid.account.username.substring(0, 1).toUpperCase(),
+                                              style: const TextStyle(
+                                                color: CupertinoColors.white,
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            )
+                                          : const Icon(
+                                              CupertinoIcons.person,
+                                              size: 15,
+                                              color: CupertinoColors.white,
+                                            ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            '探索精选画廊',
+                            style: TextStyle(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.6,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            featured != null
+                                ? '当期精选：${featured.title}'
+                                : '清透玻璃操作层 · 暖纸实体阅读面',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              color: CupertinoColors.white.withValues(alpha: 0.78),
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          LiquidSpringControl(
+                            onTap: widget.onOpenExplore,
+                            child: LiquidGlassSurface(
+                              variant: LiquidGlassVariant.clear,
+                              onDarkScene: true,
+                              borderRadius: 999,
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.search,
+                                    size: 16,
+                                    color: CupertinoColors.white.withValues(alpha: 0.82),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      '搜索漫画名、JM 车号、作者或标签...',
+                                      style: TextStyle(
+                                        fontSize: 13.5,
+                                        color: CupertinoColors.white.withValues(alpha: 0.80),
+                                      ),
+                                    ),
+                                  ),
+                                  const Icon(
+                                    CupertinoIcons.arrow_right,
+                                    size: 15,
+                                    color: LiquidTokens.lightIce,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+          ),
           if (hybrid.history.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
@@ -279,76 +276,82 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('继续阅读', style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 10),
+                    Text(
+                      '继续阅读',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
+                        color: LiquidTokens.ink(context),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     SizedBox(
-                      height: 192,
+                      height: 204,
                       child: ListView.separated(
                         scrollDirection: Axis.horizontal,
                         physics: const BouncingScrollPhysics(),
                         itemCount: hybrid.history.take(10).length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 10),
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
                         itemBuilder: (ctx, i) {
                           final h = hybrid.history[i];
                           final pct = h.totalPages > 0
                               ? ((h.pageIndex + 1) / h.totalPages).clamp(0.0, 1.0)
                               : 0.0;
-                          return GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              CupertinoPageRoute(
-                                builder: (_) => ReaderScreen(
-                                  albumId: h.albumId,
-                                  photoId: h.photoId,
-                                  title: h.title,
-                                  initialPage: h.pageIndex,
-                                ),
-                              ),
+                          return LiquidSpringControl(
+                            onTap: () => openReaderScreen(
+                              context,
+                              albumId: h.albumId,
+                              photoId: h.photoId,
+                              title: h.title,
+                              initialPage: h.pageIndex,
                             ),
-                            child: Container(
-                              width: 118,
-                              padding: const EdgeInsets.all(6),
-                              decoration: BoxDecoration(
-                                color: JmlisColors.card(ctx),
-                                borderRadius: BorderRadius.circular(15),
-                                border: Border.all(color: JmlisColors.border(ctx)),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        ModernCoverImage(coverUrl: h.coverUrl, borderRadius: 10),
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: 0,
-                                          child: Container(
-                                            height: 4,
-                                            color: CupertinoColors.black.withValues(alpha: 0.4),
-                                            alignment: Alignment.centerLeft,
-                                            child: FractionallySizedBox(
-                                              widthFactor: pct,
-                                              child: Container(color: JmlisColors.accent(ctx)),
+                            child: SizedBox(
+                              width: 126,
+                              child: LiquidSolidCard(
+                                borderRadius: 20,
+                                padding: const EdgeInsets.all(7),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Stack(
+                                        fit: StackFit.expand,
+                                        children: [
+                                          ModernCoverImage(coverUrl: h.coverUrl, borderRadius: 13),
+                                          Positioned(
+                                            left: 0,
+                                            right: 0,
+                                            bottom: 0,
+                                            child: ClipRRect(
+                                              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(13)),
+                                              child: Container(
+                                                height: 4,
+                                                color: CupertinoColors.black.withValues(alpha: 0.42),
+                                                alignment: Alignment.centerLeft,
+                                                child: FractionallySizedBox(
+                                                  widthFactor: pct,
+                                                  child: Container(color: LiquidTokens.lightIce),
+                                                ),
+                                              ),
                                             ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    h.title.isEmpty ? 'JM${h.albumId}' : h.title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-                                  ),
-                                  Text(
-                                    '第 ${h.pageIndex + 1} 页',
-                                    style: TextStyle(fontSize: 11, color: JmlisColors.secondaryText(ctx)),
-                                  ),
-                                ],
+                                    const SizedBox(height: 7),
+                                    Text(
+                                      h.title.isEmpty ? 'JM${h.albumId}' : h.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      '第 ${h.pageIndex + 1} 页',
+                                      style: TextStyle(fontSize: 11, color: LiquidTokens.muted(ctx)),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );
@@ -361,9 +364,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           if (_loading) ...[
             const SliverToBoxAdapter(child: SizedBox(height: 16)),
-            const SkeletonGridSliver(count: 9),
+            const SkeletonGridSliver(count: 6),
           ] else if (_error != null)
             SliverFillRemaining(
+              hasScrollBody: false,
               child: Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
@@ -371,8 +375,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text('加载失败: $_error', textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      CupertinoButton.filled(onPressed: _load, child: const Text('重试')),
+                      const SizedBox(height: 14),
+                      LiquidSpringControl(
+                        onTap: _load,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          decoration: BoxDecoration(
+                            color: LiquidTokens.scene(context),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: const Text(
+                            '重试',
+                            style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -382,14 +399,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             for (final sec in _sections) ...[
               SliverToBoxAdapter(
                 child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 10),
+                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(sec.title, style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700)),
+                      Text(
+                        sec.title,
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.3,
+                          color: LiquidTokens.ink(context),
+                        ),
+                      ),
                       Text(
                         '${sec.albums.length} 部',
-                        style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(context)),
+                        style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
                       ),
                     ],
                   ),
@@ -398,11 +423,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 sliver: SliverGrid(
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 3,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 0.56,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossCount,
+                    mainAxisSpacing: 14,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: 0.60,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (ctx, idx) {
@@ -419,7 +444,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
             ],
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          const SliverToBoxAdapter(child: SizedBox(height: 112)),
         ],
       ),
     );

@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
+import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
+import '../widgets/liquid_glass.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -70,23 +72,24 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final acc = state.account;
 
     return CupertinoPageScaffold(
+      backgroundColor: LiquidTokens.canvas(context),
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          const CupertinoSliverNavigationBar(largeTitle: Text('我的与设置')),
+          CupertinoSliverNavigationBar(
+            largeTitle: const Text('我的与设置'),
+            backgroundColor: LiquidTokens.tintedGlassFill(context),
+            border: Border(bottom: BorderSide(color: LiquidTokens.separator(context), width: 0.5)),
+          ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 112),
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // 账号卡片（支持直连 & 局域网双模式登录）
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: JmlisColors.card(context),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: JmlisColors.border(context)),
-                    ),
+                  // 账号卡片
+                  LiquidSolidCard(
+                    padding: const EdgeInsets.all(18),
                     child: acc.isLoggedIn
                         ? Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,7 +100,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                     width: 48,
                                     height: 48,
                                     decoration: BoxDecoration(
-                                      color: JmlisColors.accent(context),
+                                      color: LiquidTokens.scene(context),
                                       shape: BoxShape.circle,
                                     ),
                                     alignment: Alignment.center,
@@ -122,15 +125,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                 acc.username,
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                                                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
                                               ),
                                             ),
                                             if (acc.levelName.isNotEmpty) ...[
                                               const SizedBox(width: 6),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                                                 decoration: BoxDecoration(
-                                                  color: JmlisColors.accentSoft(context),
+                                                  color: LiquidTokens.accentSoft(context),
                                                   borderRadius: BorderRadius.circular(999),
                                                 ),
                                                 child: Text(
@@ -138,7 +141,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                                   style: TextStyle(
                                                     fontSize: 10.5,
                                                     fontWeight: FontWeight.w600,
-                                                    color: JmlisColors.accent(context),
+                                                    color: LiquidTokens.accentStrong(context),
                                                   ),
                                                 ),
                                               ),
@@ -148,37 +151,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         const SizedBox(height: 4),
                                         Text(
                                           '金币 ${acc.coin} · ${state.activeMode == ActiveMode.lanServer ? "局域网同步" : "直连会话"}',
-                                          style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(context)),
+                                          style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
                                         ),
                                       ],
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 16),
                               Row(
                                 children: [
                                   Expanded(
-                                    child: CupertinoButton(
-                                      color: JmlisColors.accent(context),
-                                      borderRadius: BorderRadius.circular(12),
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      onPressed: _checkingIn ? null : _doCheckin,
-                                      child: Text(
-                                        _checkingIn ? '签到中...' : '每日签到',
-                                        style: const TextStyle(color: CupertinoColors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                                    child: LiquidSpringControl(
+                                      onTap: _checkingIn ? null : _doCheckin,
+                                      child: Container(
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: LiquidTokens.scene(context),
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Text(
+                                          _checkingIn ? '签到中...' : '每日签到',
+                                          style: const TextStyle(
+                                            color: CupertinoColors.white,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                       ),
                                     ),
                                   ),
                                   const SizedBox(width: 10),
-                                  CupertinoButton(
-                                    color: JmlisColors.elevated(context),
-                                    borderRadius: BorderRadius.circular(12),
-                                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                    onPressed: () => ctrl.logout(),
-                                    child: const Text(
-                                      '退出登录',
-                                      style: TextStyle(color: CupertinoColors.systemRed, fontSize: 14, fontWeight: FontWeight.w600),
+                                  LiquidSpringControl(
+                                    onTap: () => ctrl.logout(),
+                                    child: Container(
+                                      height: 44,
+                                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                                      decoration: BoxDecoration(
+                                        color: LiquidTokens.elevated(context),
+                                        borderRadius: BorderRadius.circular(999),
+                                      ),
+                                      alignment: Alignment.center,
+                                      child: const Text(
+                                        '退出登录',
+                                        style: TextStyle(
+                                          color: CupertinoColors.systemRed,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -191,113 +213,163 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                 width: 46,
                                 height: 46,
                                 decoration: BoxDecoration(
-                                  color: JmlisColors.accentSoft(context),
+                                  color: LiquidTokens.accentSoft(context),
                                   shape: BoxShape.circle,
                                 ),
-                                child: Icon(CupertinoIcons.person_fill, color: JmlisColors.accent(context)),
+                                child: Icon(
+                                  CupertinoIcons.person_fill,
+                                  color: LiquidTokens.accentStrong(context),
+                                ),
                               ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text('未登录 JM 账号', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                                    const Text('未登录 JM 账号', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                                     Text(
                                       '支持外出直连与局域网模式登录',
-                                      style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(context)),
+                                      style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
                                     ),
                                   ],
                                 ),
                               ),
-                              CupertinoButton(
-                                color: JmlisColors.accent(context),
-                                borderRadius: BorderRadius.circular(999),
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                onPressed: () => showAccountLoginSheet(context, ref),
-                                child: const Text(
-                                  '登录',
-                                  style: TextStyle(color: CupertinoColors.white, fontSize: 13.5, fontWeight: FontWeight.w600),
+                              LiquidSpringControl(
+                                onTap: () => showAccountLoginSheet(context, ref),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                                  decoration: BoxDecoration(
+                                    color: LiquidTokens.scene(context),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: const Text(
+                                    '登录',
+                                    style: TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],
                           ),
                   ),
-                  const SizedBox(height: 16),
-                  CupertinoListSection.insetGrouped(
-                    header: const Text('混合模式策略'),
-                    footer: Text(
-                      state.activeMode == ActiveMode.lanServer
-                          ? '当前状态：已连接局域网服务端（支持进度同步、发表评论与服务器缓存）'
-                          : '当前状态：手机直连禁漫（外出自动直连，支持登录、收藏与签到）',
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text(
+                      '混合模式策略',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LiquidTokens.muted(context)),
                     ),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: CupertinoSlidingSegmentedControl<ConnectionPreference>(
-                            groupValue: state.settings.preference,
-                            children: const {
-                              ConnectionPreference.auto: Text('自动切换'),
-                              ConnectionPreference.lanOnly: Text('仅局域网'),
-                              ConnectionPreference.directOnly: Text('仅直连'),
-                            },
-                            onValueChanged: (pref) {
-                              if (pref != null) {
-                                ctrl.updateSettings(state.settings.copyWith(preference: pref));
-                              }
-                            },
+                  ),
+                  LiquidSolidCard(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        LiquidSegmentedPill<ConnectionPreference>(
+                          value: state.settings.preference,
+                          items: const [
+                            (value: ConnectionPreference.auto, label: '自动切换'),
+                            (value: ConnectionPreference.lanOnly, label: '仅局域网'),
+                            (value: ConnectionPreference.directOnly, label: '仅直连'),
+                          ],
+                          onChanged: (pref) => ctrl.updateSettings(state.settings.copyWith(preference: pref)),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          state.activeMode == ActiveMode.lanServer
+                              ? '当前状态：已连接局域网服务端（支持进度同步、发表评论与服务器缓存）'
+                              : '当前状态：手机直连禁漫（外出自动直连，支持登录、收藏与签到）',
+                          style: TextStyle(fontSize: 12, height: 1.45, color: LiquidTokens.muted(context)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text(
+                      '局域网服务端地址',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LiquidTokens.muted(context)),
+                    ),
+                  ),
+                  LiquidSolidCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        CupertinoTextFormFieldRow(
+                          prefix: const Text('地址'),
+                          controller: _urlCtrl,
+                          placeholder: 'http://192.168.1.10:8800',
+                        ),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        CupertinoTextFormFieldRow(
+                          prefix: const Text('Token'),
+                          controller: _tokenCtrl,
+                          placeholder: '可选（开启 PIN 时填写）',
+                        ),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        CupertinoListTile(
+                          title: Text(
+                            '保存并探测连接',
+                            style: TextStyle(
+                              color: LiquidTokens.accentStrong(context),
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          onTap: () => ctrl.updateSettings(
+                            state.settings.copyWith(
+                              serverUrl: _urlCtrl.text.trim(),
+                              panelToken: _tokenCtrl.text.trim(),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                  CupertinoListSection.insetGrouped(
-                    header: const Text('局域网服务端地址'),
-                    children: [
-                      CupertinoTextFormFieldRow(
-                        prefix: const Text('地址'),
-                        controller: _urlCtrl,
-                        placeholder: 'http://192.168.1.10:8800',
-                      ),
-                      CupertinoTextFormFieldRow(
-                        prefix: const Text('Token'),
-                        controller: _tokenCtrl,
-                        placeholder: '可选（开启 PIN 时填写）',
-                      ),
-                      CupertinoListTile(
-                        title: Text(
-                          '保存并探测连接',
-                          style: TextStyle(color: JmlisColors.accent(context), fontWeight: FontWeight.w600),
-                        ),
-                        onTap: () => ctrl.updateSettings(
-                          state.settings.copyWith(
-                            serverUrl: _urlCtrl.text.trim(),
-                            panelToken: _tokenCtrl.text.trim(),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text(
+                      '外观与关于',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LiquidTokens.muted(context)),
+                    ),
+                  ),
+                  LiquidSolidCard(
+                    padding: EdgeInsets.zero,
+                    child: Column(
+                      children: [
+                        CupertinoListTile(
+                          title: const Text('深色模式'),
+                          trailing: CupertinoSwitch(
+                            activeTrackColor: LiquidTokens.accent(context),
+                            value: state.settings.darkMode,
+                            onChanged: (v) => ctrl.updateSettings(state.settings.copyWith(darkMode: v)),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  CupertinoListSection.insetGrouped(
-                    header: const Text('外观与关于'),
-                    children: [
-                      CupertinoListTile(
-                        title: const Text('深色模式'),
-                        trailing: CupertinoSwitch(
-                          value: state.settings.darkMode,
-                          onChanged: (v) => ctrl.updateSettings(state.settings.copyWith(darkMode: v)),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        CupertinoListTile(
+                          title: const Text('显示漫画封面'),
+                          subtitle: const Text('关闭后将隐藏列表、详情与历史中的封面图'),
+                          trailing: CupertinoSwitch(
+                            activeTrackColor: LiquidTokens.accent(context),
+                            value: state.settings.showCovers,
+                            onChanged: (v) => ctrl.updateSettings(state.settings.copyWith(showCovers: v)),
+                          ),
                         ),
-                      ),
-                      CupertinoListTile(
-                        leading: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.asset('assets/icon/app_icon.png', width: 28, height: 28),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        CupertinoListTile(
+                          leading: ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.asset('assets/icon/app_icon.png', width: 28, height: 28),
+                          ),
+                          title: const Text('JMlis'),
+                          subtitle: const Text('v2.0.1 · Liquid Glass 跨平台漫画阅读器'),
                         ),
-                        title: const Text('JMlis'),
-                        subtitle: const Text('v2.0.0 · 跨平台双模式漫画阅读器'),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),

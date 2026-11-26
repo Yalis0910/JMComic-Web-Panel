@@ -169,3 +169,28 @@ def test_clean_html_text_strips_tags_and_entities():
     assert clean_html_text(raw) == "畫風很棒\n第二行 & '測試'"
     assert clean_html_text("<p>第一段</p><p>第二段</p>") == "第一段\n第二段"
     assert clean_html_text(None) == ""
+
+
+def test_week_categories_fallback_labels(monkeypatch):
+    from types import SimpleNamespace
+    from app.services.jm_adapter import jm_adapter
+
+    fake_resp = SimpleNamespace(
+        res_data={
+            "categories": [
+                {"id": "267", "title": "", "time": "2026第266期11.20 - 11.13"},
+                {"id": "56", "title": "精选专题", "time": "2022第55期"},
+            ],
+            "type": [
+                {"id": "manga", "title": "日漫"},
+                {"id": "hanman", "title": ""},
+            ],
+        }
+    )
+    fake_client = SimpleNamespace(req_api=lambda *a, **kw: fake_resp)
+    monkeypatch.setattr(jm_adapter, "get_api_client", lambda prefer_auth=True: fake_client)
+
+    res = jm_adapter.get_week_categories()
+    assert res["categories"][0]["title"] == "2026第266期11.20 - 11.13"
+    assert res["categories"][1]["title"] == "2022第55期 · 精选专题"
+    assert res["types"][1]["title"] == "韩漫"

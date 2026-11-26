@@ -1,39 +1,44 @@
-import 'dart:ui';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
+import '../reader/reader_screen.dart';
+import '../theme/liquid_glass_theme.dart';
+import 'liquid_glass.dart';
 
-class JmlisColors {
-  static bool isDark(BuildContext context) =>
-      CupertinoTheme.brightnessOf(context) == Brightness.dark;
-
-  static Color canvas(BuildContext context) =>
-      isDark(context) ? const Color(0xFF090B12) : const Color(0xFFF4F5F9);
-
-  static Color card(BuildContext context) =>
-      isDark(context) ? const Color(0xFF131622) : const Color(0xFFFFFFFF);
-
-  static Color elevated(BuildContext context) =>
-      isDark(context) ? const Color(0xFF1B2030) : const Color(0xFFECEEF4);
-
-  static Color border(BuildContext context) =>
-      isDark(context) ? const Color(0x18FFFFFF) : const Color(0x1611131C);
-
-  static Color accent(BuildContext context) =>
-      isDark(context) ? const Color(0xFF6366F1) : const Color(0xFF4F46E5);
-
-  static Color accentSoft(BuildContext context) =>
-      isDark(context) ? const Color(0x2E6366F1) : const Color(0x1E4F46E5);
-
-  static Color secondaryText(BuildContext context) =>
-      isDark(context) ? const Color(0xB0E2E8F0) : const Color(0xA3181C2D);
+Future<void> openReaderScreen(
+  BuildContext context, {
+  required String albumId,
+  required String photoId,
+  required String title,
+  int initialPage = 0,
+}) {
+  return Navigator.of(context, rootNavigator: true).push(
+    CupertinoPageRoute(
+      builder: (_) => ReaderScreen(
+        albumId: albumId,
+        photoId: photoId,
+        title: title,
+        initialPage: initialPage,
+      ),
+    ),
+  );
 }
 
-class ModernCoverImage extends StatefulWidget {
+class JmlisColors {
+  static bool isDark(BuildContext context) => LiquidTokens.isDark(context);
+  static Color canvas(BuildContext context) => LiquidTokens.canvas(context);
+  static Color card(BuildContext context) => LiquidTokens.solid(context);
+  static Color elevated(BuildContext context) => LiquidTokens.elevated(context);
+  static Color border(BuildContext context) => LiquidTokens.separator(context);
+  static Color accent(BuildContext context) => LiquidTokens.accentStrong(context);
+  static Color accentSoft(BuildContext context) => LiquidTokens.accentSoft(context);
+  static Color secondaryText(BuildContext context) => LiquidTokens.muted(context);
+}
+
+class ModernCoverImage extends ConsumerStatefulWidget {
   final String coverUrl;
   final List<String> fallbacks;
   final Map<String, String> headers;
@@ -47,17 +52,17 @@ class ModernCoverImage extends StatefulWidget {
     required this.coverUrl,
     this.fallbacks = const [],
     this.headers = const {},
-    this.borderRadius = 12,
+    this.borderRadius = 16,
     this.width,
     this.height,
     this.fit = BoxFit.cover,
   });
 
   @override
-  State<ModernCoverImage> createState() => _ModernCoverImageState();
+  ConsumerState<ModernCoverImage> createState() => _ModernCoverImageState();
 }
 
-class _ModernCoverImageState extends State<ModernCoverImage> {
+class _ModernCoverImageState extends ConsumerState<ModernCoverImage> {
   int _urlIndex = 0;
 
   @override
@@ -75,17 +80,35 @@ class _ModernCoverImageState extends State<ModernCoverImage> {
 
   @override
   Widget build(BuildContext context) {
+    final showCovers = ref.watch(hybridControllerProvider.select((s) => s.settings.showCovers));
+    if (!showCovers) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(widget.borderRadius),
+        child: Container(
+          width: widget.width,
+          height: widget.height,
+          color: LiquidTokens.elevated(context),
+          alignment: Alignment.center,
+          child: Icon(
+            CupertinoIcons.eye_slash,
+            size: 24,
+            color: LiquidTokens.muted(context),
+          ),
+        ),
+      );
+    }
+
     final urls = _candidates;
     final child = _urlIndex >= urls.length
         ? Container(
             width: widget.width,
             height: widget.height,
-            color: JmlisColors.elevated(context),
+            color: LiquidTokens.elevated(context),
             alignment: Alignment.center,
             child: Icon(
               CupertinoIcons.book_fill,
               size: 26,
-              color: JmlisColors.secondaryText(context),
+              color: LiquidTokens.muted(context),
             ),
           )
         : Image.network(
@@ -99,7 +122,7 @@ class _ModernCoverImageState extends State<ModernCoverImage> {
               return Container(
                 width: widget.width,
                 height: widget.height,
-                color: JmlisColors.elevated(ctx),
+                color: LiquidTokens.elevated(ctx),
                 alignment: Alignment.center,
                 child: const CupertinoActivityIndicator(radius: 10),
               );
@@ -113,12 +136,12 @@ class _ModernCoverImageState extends State<ModernCoverImage> {
               return Container(
                 width: widget.width,
                 height: widget.height,
-                color: JmlisColors.elevated(ctx),
+                color: LiquidTokens.elevated(ctx),
                 alignment: Alignment.center,
                 child: Icon(
                   CupertinoIcons.book,
                   size: 24,
-                  color: JmlisColors.secondaryText(ctx),
+                  color: LiquidTokens.muted(ctx),
                 ),
               );
             },
@@ -131,6 +154,7 @@ class _ModernCoverImageState extends State<ModernCoverImage> {
   }
 }
 
+/// Solid Reading Card with Clear Glass cover chips.
 class ModernComicCard extends StatelessWidget {
   final ComicSummary album;
   final int? rank;
@@ -147,22 +171,11 @@ class ModernComicCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return LiquidSpringControl(
       onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: JmlisColors.card(context),
-          borderRadius: BorderRadius.circular(15),
-          border: Border.all(color: JmlisColors.border(context)),
-          boxShadow: [
-            BoxShadow(
-              color: CupertinoColors.black.withValues(alpha: JmlisColors.isDark(context) ? 0.28 : 0.05),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        padding: const EdgeInsets.all(6),
+      child: LiquidSolidCard(
+        borderRadius: 22,
+        padding: const EdgeInsets.all(8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -174,23 +187,48 @@ class ModernComicCard extends StatelessWidget {
                     coverUrl: album.coverUrl,
                     fallbacks: album.coverFallbacks,
                     headers: album.coverHeaders,
-                    borderRadius: 11,
+                    borderRadius: 15,
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 44,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: const BorderRadius.vertical(bottom: Radius.circular(15)),
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [
+                              const Color(0x000F1920),
+                              const Color(0xFF0F1920).withValues(alpha: 0.62),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                   if (rank != null)
                     Positioned(
-                      top: 6,
-                      left: 6,
+                      top: 7,
+                      left: 7,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
                           color: rank == 1
-                              ? const Color(0xFFF59E0B)
+                              ? const Color(0xFFB5751C)
                               : rank == 2
-                                  ? const Color(0xFF64748B)
+                                  ? const Color(0xFF4C5D57)
                                   : rank == 3
-                                      ? const Color(0xFFB45309)
-                                      : CupertinoColors.black.withValues(alpha: 0.68),
+                                      ? const Color(0xFF8C5824)
+                                      : const Color(0xFF0F1920).withValues(alpha: 0.66),
                           borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color: CupertinoColors.white.withValues(alpha: 0.36),
+                            width: 0.8,
+                          ),
                         ),
                         child: Text(
                           '#$rank',
@@ -204,50 +242,81 @@ class ModernComicCard extends StatelessWidget {
                     ),
                   if (badge != null && badge!.isNotEmpty)
                     Positioned(
-                      top: 6,
-                      right: 6,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                            color: CupertinoColors.black.withValues(alpha: 0.55),
-                            child: Text(
-                              badge!,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: CupertinoColors.white,
-                              ),
-                            ),
+                      top: 7,
+                      right: 7,
+                      child: LiquidGlassSurface(
+                        variant: LiquidGlassVariant.clear,
+                        onDarkScene: true,
+                        borderRadius: 999,
+                        blurSigma: 8,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        child: Text(
+                          badge!,
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: CupertinoColors.white,
                           ),
                         ),
                       ),
                     ),
+                  Positioned(
+                    left: 7,
+                    right: 7,
+                    bottom: 7,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF0F1920).withValues(alpha: 0.52),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: CupertinoColors.white.withValues(alpha: 0.25),
+                              width: 0.6,
+                            ),
+                          ),
+                          child: Text(
+                            'JM${album.albumId}',
+                            style: const TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w600,
+                              color: CupertinoColors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Text(
                 album.title.isEmpty ? 'JM${album.albumId}' : album.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, height: 1.25),
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  height: 1.25,
+                  color: LiquidTokens.ink(context),
+                ),
               ),
             ),
-            const SizedBox(height: 2),
+            const SizedBox(height: 3),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
+              padding: const EdgeInsets.fromLTRB(4, 0, 4, 2),
               child: Text(
                 album.author.isNotEmpty
                     ? album.author
-                    : (album.category.isNotEmpty ? album.category : 'JM${album.albumId}'),
+                    : (album.category.isNotEmpty ? album.category : '精选漫画'),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 11, color: JmlisColors.secondaryText(context)),
+                style: TextStyle(fontSize: 11.5, color: LiquidTokens.muted(context)),
               ),
             ),
           ],
@@ -259,53 +328,50 @@ class ModernComicCard extends StatelessWidget {
 
 class SkeletonGridSliver extends StatelessWidget {
   final int count;
-  const SkeletonGridSliver({super.key, this.count = 9});
+  const SkeletonGridSliver({super.key, this.count = 6});
 
   @override
   Widget build(BuildContext context) {
+    final crossCount = MediaQuery.of(context).size.width >= 680 ? 3 : 2;
     return SliverPadding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       sliver: SliverGrid(
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 10,
-          childAspectRatio: 0.56,
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossCount,
+          mainAxisSpacing: 14,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.60,
         ),
         delegate: SliverChildBuilderDelegate(
-          (ctx, _) => Container(
-            decoration: BoxDecoration(
-              color: JmlisColors.card(ctx),
-              borderRadius: BorderRadius.circular(15),
-              border: Border.all(color: JmlisColors.border(ctx)),
-            ),
-            padding: const EdgeInsets.all(6),
+          (ctx, _) => LiquidSolidCard(
+            borderRadius: 22,
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: Container(
                     decoration: BoxDecoration(
-                      color: JmlisColors.elevated(ctx),
-                      borderRadius: BorderRadius.circular(11),
+                      color: LiquidTokens.elevated(ctx),
+                      borderRadius: BorderRadius.circular(15),
                     ),
                   ),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Container(
-                  height: 11,
+                  height: 12,
                   width: double.infinity,
                   decoration: BoxDecoration(
-                    color: JmlisColors.elevated(ctx),
+                    color: LiquidTokens.elevated(ctx),
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 6),
                 Container(
-                  height: 9,
-                  width: 56,
+                  height: 10,
+                  width: 72,
                   decoration: BoxDecoration(
-                    color: JmlisColors.elevated(ctx),
+                    color: LiquidTokens.elevated(ctx),
                     borderRadius: BorderRadius.circular(6),
                   ),
                 ),
@@ -331,11 +397,11 @@ class _CommentCardTileState extends State<CommentCardTile> {
   bool _revealed = false;
 
   static const _avatarPalette = [
-    Color(0xFF4F46E5),
-    Color(0xFFEC4899),
-    Color(0xFF0EA5E9),
-    Color(0xFF10B981),
-    Color(0xFFF59E0B),
+    Color(0xFF25414A),
+    Color(0xFF355B63),
+    Color(0xFF557B79),
+    Color(0xFF3E6B66),
+    Color(0xFF4A5E6D),
   ];
 
   @override
@@ -345,145 +411,147 @@ class _CommentCardTileState extends State<CommentCardTile> {
     final avatarColor = _avatarPalette[name.hashCode.abs() % _avatarPalette.length];
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: JmlisColors.card(context),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: JmlisColors.border(context)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(color: avatarColor, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: Text(
-                  name.substring(0, 1).toUpperCase(),
-                  style: const TextStyle(color: CupertinoColors.white, fontSize: 13, fontWeight: FontWeight.w700),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            name,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        if (c.levelName.isNotEmpty) ...[
-                          const SizedBox(width: 6),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
-                            decoration: BoxDecoration(
-                              color: JmlisColors.accentSoft(context),
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                            child: Text(
-                              c.levelName,
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: JmlisColors.accent(context)),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    if (c.addtime.isNotEmpty)
-                      Text(
-                        c.addtime,
-                        style: TextStyle(fontSize: 11, color: JmlisColors.secondaryText(context)),
-                      ),
-                  ],
-                ),
-              ),
-              if ((int.tryParse(c.likes) ?? 0) > 0)
+      margin: const EdgeInsets.only(bottom: 12),
+      child: LiquidSolidCard(
+        borderRadius: 22,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: JmlisColors.elevated(context),
-                    borderRadius: BorderRadius.circular(999),
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(color: avatarColor, shape: BoxShape.circle),
+                  alignment: Alignment.center,
+                  child: Text(
+                    name.substring(0, 1).toUpperCase(),
+                    style: const TextStyle(color: CupertinoColors.white, fontSize: 13, fontWeight: FontWeight.w700),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Icon(CupertinoIcons.hand_thumbsup_fill, size: 11, color: JmlisColors.secondaryText(context)),
-                      const SizedBox(width: 4),
-                      Text(c.likes, style: TextStyle(fontSize: 11, color: JmlisColors.secondaryText(context))),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              name,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          if (c.levelName.isNotEmpty) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: LiquidTokens.accentSoft(context),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Text(
+                                c.levelName,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: LiquidTokens.accentStrong(context),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (c.addtime.isNotEmpty)
+                        Text(
+                          c.addtime,
+                          style: TextStyle(fontSize: 11, color: LiquidTokens.muted(context)),
+                        ),
                     ],
                   ),
                 ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          if (c.spoiler && !_revealed)
-            GestureDetector(
-              onTap: () => setState(() => _revealed = true),
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: JmlisColors.elevated(context),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(CupertinoIcons.eye_slash, size: 14, color: JmlisColors.secondaryText(context)),
-                    const SizedBox(width: 6),
-                    Text('包含剧透，点击查看内容', style: TextStyle(fontSize: 12.5, color: JmlisColors.secondaryText(context))),
-                  ],
-                ),
-              ),
-            )
-          else
-            Text(
-              c.content.isEmpty ? '（空评论）' : c.content,
-              style: const TextStyle(fontSize: 14, height: 1.45),
+                if ((int.tryParse(c.likes) ?? 0) > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: LiquidTokens.elevated(context),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(CupertinoIcons.hand_thumbsup_fill, size: 11, color: LiquidTokens.muted(context)),
+                        const SizedBox(width: 4),
+                        Text(c.likes, style: TextStyle(fontSize: 11, color: LiquidTokens.muted(context))),
+                      ],
+                    ),
+                  ),
+              ],
             ),
-          if (c.replies.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: JmlisColors.elevated(context),
-                borderRadius: BorderRadius.circular(10),
+            if (c.spoiler && !_revealed)
+              GestureDetector(
+                onTap: () => setState(() => _revealed = true),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.elevated(context),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(CupertinoIcons.eye_slash, size: 14, color: LiquidTokens.muted(context)),
+                      const SizedBox(width: 6),
+                      Text('包含剧透，点击查看内容', style: TextStyle(fontSize: 12.5, color: LiquidTokens.muted(context))),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Text(
+                c.content.isEmpty ? '（空评论）' : c.content,
+                style: const TextStyle(fontSize: 14, height: 1.5),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: c.replies
-                    .map(
-                      (r) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              TextSpan(
-                                text: '${r.username.isEmpty ? '匿名' : r.username}：',
-                                style: TextStyle(fontWeight: FontWeight.w600, color: JmlisColors.accent(context)),
-                              ),
-                              TextSpan(text: r.content),
-                            ],
+            if (c.replies.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: LiquidTokens.elevated(context),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: c.replies
+                      .map(
+                        (r) => Padding(
+                          padding: const EdgeInsets.only(bottom: 4),
+                          child: Text.rich(
+                            TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: '${r.username.isEmpty ? '匿名' : r.username}：',
+                                  style: TextStyle(fontWeight: FontWeight.w600, color: LiquidTokens.accentStrong(context)),
+                                ),
+                                TextSpan(text: r.content),
+                              ],
+                            ),
+                            style: const TextStyle(fontSize: 12.5, height: 1.45),
                           ),
-                          style: const TextStyle(fontSize: 12.5, height: 1.4),
                         ),
-                      ),
-                    )
-                    .toList(),
+                      )
+                      .toList(),
+                ),
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -549,89 +617,101 @@ class _AccountLoginSheetState extends State<_AccountLoginSheet> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-      child: Container(
-        decoration: BoxDecoration(
-          color: JmlisColors.card(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Center(
-                child: Container(
-                  width: 38,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: JmlisColors.border(context),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.asset('assets/icon/app_icon.png', width: 38, height: 38),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('登录 JM 账号', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-                        Text(
-                          '当前通道：$modeLabel（支持云端收藏与签到）',
-                          style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(context)),
-                        ),
-                      ],
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(LiquidTokens.radiusSheet)),
+        child: LiquidGlassSurface(
+          variant: LiquidGlassVariant.tinted,
+          borderRadius: LiquidTokens.radiusSheet,
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 28),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: LiquidTokens.separator(context),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              CupertinoTextField(
-                controller: _userCtrl,
-                placeholder: '用户名或邮箱',
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: JmlisColors.elevated(context),
-                  borderRadius: BorderRadius.circular(12),
                 ),
-              ),
-              const SizedBox(height: 10),
-              CupertinoTextField(
-                controller: _passCtrl,
-                placeholder: '密码',
-                obscureText: true,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: JmlisColors.elevated(context),
-                  borderRadius: BorderRadius.circular(12),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.asset('assets/icon/app_icon.png', width: 40, height: 40),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('登录 JM 账号', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                          Text(
+                            '当前通道：$modeLabel（支持云端收藏与签到）',
+                            style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                onSubmitted: (_) => _submit(),
-              ),
-              if (_error != null) ...[
+                const SizedBox(height: 18),
+                CupertinoTextField(
+                  controller: _userCtrl,
+                  placeholder: '用户名或邮箱',
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.solid(context),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: LiquidTokens.separator(context)),
+                  ),
+                ),
                 const SizedBox(height: 10),
-                Text(
-                  _error!,
-                  style: const TextStyle(color: CupertinoColors.systemRed, fontSize: 12.5),
+                CupertinoTextField(
+                  controller: _passCtrl,
+                  placeholder: '密码',
+                  obscureText: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.solid(context),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: LiquidTokens.separator(context)),
+                  ),
+                  onSubmitted: (_) => _submit(),
+                ),
+                if (_error != null) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: CupertinoColors.systemRed, fontSize: 12.5),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                LiquidSpringControl(
+                  onTap: _submitting ? null : _submit,
+                  child: Container(
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: LiquidTokens.scene(context),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    alignment: Alignment.center,
+                    child: _submitting
+                        ? const CupertinoActivityIndicator(color: CupertinoColors.white)
+                        : const Text(
+                            '登录',
+                            style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w600, fontSize: 15),
+                          ),
+                  ),
                 ),
               ],
-              const SizedBox(height: 16),
-              CupertinoButton(
-                color: JmlisColors.accent(context),
-                borderRadius: BorderRadius.circular(14),
-                onPressed: _submitting ? null : _submit,
-                child: _submitting
-                    ? const CupertinoActivityIndicator(color: CupertinoColors.white)
-                    : const Text('登录', style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w600)),
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -4,8 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../detail/album_detail_screen.dart';
-import '../reader/reader_screen.dart';
+import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
+import '../widgets/liquid_glass.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -17,6 +18,7 @@ class LibraryScreen extends ConsumerStatefulWidget {
 class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   String _tab = 'fav';
   FavoritePageResult? _favResult;
+  List<FavoriteFolder> _folders = const [];
   String _folderId = '0';
   int _page = 1;
   bool _favLoading = false;
@@ -46,7 +48,14 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           .read(hybridControllerProvider.notifier)
           .activeSource
           .getFavorites(page: _page, folderId: _folderId);
-      if (mounted) setState(() => _favResult = res);
+      if (mounted) {
+        setState(() {
+          _favResult = res;
+          if (res.folders.isNotEmpty || _folderId == '0') {
+            _folders = res.folders;
+          }
+        });
+      }
     } catch (e) {
       if (mounted) setState(() => _favError = '$e');
     } finally {
@@ -66,32 +75,64 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<HybridState>(hybridControllerProvider, (prev, next) {
+      final wasLoggedIn = prev?.account.isLoggedIn ?? false;
+      final isLoggedIn = next.account.isLoggedIn;
+      final modeChanged = prev != null && prev.activeMode != next.activeMode;
+
+      if (!wasLoggedIn && isLoggedIn) {
+        setState(() {
+          _folderId = '0';
+          _page = 1;
+          _favError = null;
+        });
+        _loadFavorites();
+      } else if (wasLoggedIn && !isLoggedIn) {
+        setState(() {
+          _favResult = null;
+          _folders = const [];
+          _folderId = '0';
+          _page = 1;
+          _favError = null;
+        });
+      } else if (modeChanged && isLoggedIn) {
+        setState(() {
+          _folderId = '0';
+          _page = 1;
+        });
+        _loadFavorites();
+      }
+    });
+
     final hybrid = ref.watch(hybridControllerProvider);
 
     return CupertinoPageScaffold(
+      backgroundColor: LiquidTokens.canvas(context),
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          const CupertinoSliverNavigationBar(largeTitle: Text('书架')),
+          CupertinoSliverNavigationBar(
+            largeTitle: const Text('书架'),
+            backgroundColor: LiquidTokens.tintedGlassFill(context),
+            border: Border(bottom: BorderSide(color: LiquidTokens.separator(context), width: 0.5)),
+          ),
           CupertinoSliverRefreshControl(
             onRefresh: _tab == 'fav' ? _loadFavorites : _loadOffline,
           ),
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-              child: CupertinoSlidingSegmentedControl<String>(
-                groupValue: _tab,
-                children: const {
-                  'fav': Text('云端收藏'),
-                  'history': Text('阅读历史'),
-                  'offline': Text('离线缓存'),
-                },
-                onValueChanged: (v) {
-                  if (v != null) {
-                    setState(() => _tab = v);
-                    if (v == 'fav') _loadFavorites();
-                    if (v == 'offline') _loadOffline();
-                  }
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+              child: LiquidSegmentedPill<String>(
+                value: _tab,
+                items: const [
+                  (value: 'fav', label: '云端收藏'),
+                  (value: 'history', label: '阅读历史'),
+                  (value: 'offline', label: '离线缓存'),
+                ],
+                onChanged: (v) {
+                  setState(() => _tab = v);
+                  if (v == 'fav') _loadFavorites();
+                  if (v == 'offline') _loadOffline();
                 },
               ),
             ),
@@ -99,7 +140,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           if (_tab == 'fav') ..._buildFavorites(context, hybrid)
           else if (_tab == 'history') ..._buildHistory(context, hybrid)
           else ..._buildOffline(context),
-          const SliverToBoxAdapter(child: SizedBox(height: 40)),
+          const SliverToBoxAdapter(child: SizedBox(height: 112)),
         ],
       ),
     );
@@ -113,34 +154,41 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Container(
-                padding: const EdgeInsets.all(22),
-                decoration: BoxDecoration(
-                  color: JmlisColors.card(context),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: JmlisColors.border(context)),
-                ),
+              child: LiquidSolidCard(
+                padding: const EdgeInsets.all(24),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(CupertinoIcons.heart_circle_fill, size: 48, color: JmlisColors.accent(context)),
+                    Icon(
+                      CupertinoIcons.heart_circle_fill,
+                      size: 48,
+                      color: LiquidTokens.accentStrong(context),
+                    ),
                     const SizedBox(height: 12),
-                    const Text('登录后同步云端收藏', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                    const Text('登录后同步云端收藏', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
                     const SizedBox(height: 6),
                     Text(
                       '无论处于局域网还是外出直连模式，均可直接登录 JM 账号浏览与管理收藏夹。',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 13, color: JmlisColors.secondaryText(context)),
+                      style: TextStyle(fontSize: 13, color: LiquidTokens.muted(context)),
                     ),
-                    const SizedBox(height: 16),
-                    CupertinoButton(
-                      color: JmlisColors.accent(context),
-                      borderRadius: BorderRadius.circular(999),
-                      onPressed: () async {
+                    const SizedBox(height: 18),
+                    LiquidSpringControl(
+                      onTap: () async {
                         final ok = await showAccountLoginSheet(context, ref);
                         if (ok) _loadFavorites();
                       },
-                      child: const Text('立即登录', style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w600)),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: LiquidTokens.scene(context),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const Text(
+                          '立即登录',
+                          style: TextStyle(color: CupertinoColors.white, fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -152,7 +200,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     }
 
     if (_favLoading) {
-      return const [SkeletonGridSliver(count: 9)];
+      return const [SkeletonGridSliver(count: 6)];
     }
 
     if (_favError != null) {
@@ -173,14 +221,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       ];
     }
 
-    final folders = _favResult?.folders ?? const <FavoriteFolder>[];
+    final folders = _folders.isNotEmpty ? _folders : (_favResult?.folders ?? const <FavoriteFolder>[]);
     final albums = _favResult?.albums ?? const <ComicSummary>[];
+    final crossCount = MediaQuery.of(context).size.width >= 680 ? 3 : 2;
 
     return [
       if (folders.isNotEmpty)
         SliverToBoxAdapter(
           child: SizedBox(
-            height: 36,
+            height: 38,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -214,7 +263,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             ),
           ),
         ),
-      if (folders.isNotEmpty) const SliverToBoxAdapter(child: SizedBox(height: 12)),
+      if (folders.isNotEmpty) const SliverToBoxAdapter(child: SizedBox(height: 14)),
       if (albums.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,
@@ -224,11 +273,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         SliverPadding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           sliver: SliverGrid(
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 10,
-              childAspectRatio: 0.56,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: crossCount,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 12,
+              childAspectRatio: 0.60,
             ),
             delegate: SliverChildBuilderDelegate(
               (ctx, idx) {
@@ -247,7 +296,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         if ((_favResult?.pageCount ?? 1) > 1)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.only(top: 16),
+              padding: const EdgeInsets.only(top: 18),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -296,63 +345,58 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             (ctx, idx) {
               final h = hybrid.history[idx];
               final pct = h.totalPages > 0 ? ((h.pageIndex + 1) / h.totalPages).clamp(0.0, 1.0) : 0.0;
-              return GestureDetector(
-                onTap: () => Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (_) => ReaderScreen(
-                      albumId: h.albumId,
-                      photoId: h.photoId,
-                      title: h.title,
-                      initialPage: h.pageIndex,
-                    ),
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: LiquidSpringControl(
+                  onTap: () => openReaderScreen(
+                    context,
+                    albumId: h.albumId,
+                    photoId: h.photoId,
+                    title: h.title,
+                    initialPage: h.pageIndex,
                   ),
-                ),
-                child: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: JmlisColors.card(ctx),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: JmlisColors.border(ctx)),
-                  ),
-                  child: Row(
-                    children: [
-                      ModernCoverImage(coverUrl: h.coverUrl, width: 54, height: 72, borderRadius: 10),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              h.title.isEmpty ? 'JM${h.albumId}' : h.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '读至第 ${h.pageIndex + 1} / ${h.totalPages} 页',
-                              style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(ctx)),
-                            ),
-                            const SizedBox(height: 6),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(999),
-                              child: Container(
-                                height: 4,
-                                color: JmlisColors.elevated(ctx),
-                                alignment: Alignment.centerLeft,
-                                child: FractionallySizedBox(
-                                  widthFactor: pct,
-                                  child: Container(color: JmlisColors.accent(ctx)),
+                  child: LiquidSolidCard(
+                    borderRadius: 22,
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        ModernCoverImage(coverUrl: h.coverUrl, width: 56, height: 74, borderRadius: 12),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                h.title.isEmpty ? 'JM${h.albumId}' : h.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '读至第 ${h.pageIndex + 1} / ${h.totalPages} 页',
+                                style: TextStyle(fontSize: 12, color: LiquidTokens.muted(ctx)),
+                              ),
+                              const SizedBox(height: 7),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: Container(
+                                  height: 5,
+                                  color: LiquidTokens.elevated(ctx),
+                                  alignment: Alignment.centerLeft,
+                                  child: FractionallySizedBox(
+                                    widthFactor: pct,
+                                    child: Container(color: LiquidTokens.accentStrong(ctx)),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(CupertinoIcons.chevron_forward, size: 16, color: JmlisColors.secondaryText(ctx)),
-                    ],
+                        const SizedBox(width: 8),
+                        Icon(CupertinoIcons.chevron_forward, size: 16, color: LiquidTokens.muted(ctx)),
+                      ],
+                    ),
                   ),
                 ),
               );
@@ -376,8 +420,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           hasScrollBody: false,
           child: Center(
             child: Text(
-              '暂无本地离线章节，可在作品详情页点击“离线缓存”',
-              style: TextStyle(color: JmlisColors.secondaryText(context), fontSize: 13.5),
+              '暂无本地离线章节，可在作品详情页点击“缓存”',
+              style: TextStyle(color: LiquidTokens.muted(context), fontSize: 13.5),
             ),
           ),
         ),
@@ -391,39 +435,37 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           delegate: SliverChildBuilderDelegate(
             (ctx, idx) {
               final item = _offlineChapters[idx];
-              return Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                decoration: BoxDecoration(
-                  color: JmlisColors.card(ctx),
-                  borderRadius: BorderRadius.circular(15),
-                  border: Border.all(color: JmlisColors.border(ctx)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(CupertinoIcons.folder_fill, color: JmlisColors.accent(ctx)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('章节 ID ${item.photoId}', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
-                          Text(
-                            '已缓存 ${item.pageCount} 页',
-                            style: TextStyle(fontSize: 12, color: JmlisColors.secondaryText(ctx)),
-                          ),
-                        ],
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: LiquidSolidCard(
+                  borderRadius: 20,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  child: Row(
+                    children: [
+                      Icon(CupertinoIcons.folder_fill, color: LiquidTokens.accentStrong(ctx)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('章节 ID ${item.photoId}', style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600)),
+                            Text(
+                              '已缓存 ${item.pageCount} 页',
+                              style: TextStyle(fontSize: 12, color: LiquidTokens.muted(ctx)),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    CupertinoButton(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      onPressed: () async {
-                        await ref.read(hybridControllerProvider.notifier).deleteOfflineChapter(item.photoId);
-                        _loadOffline();
-                      },
-                      child: const Icon(CupertinoIcons.trash, size: 18, color: CupertinoColors.systemRed),
-                    ),
-                  ],
+                      CupertinoButton(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        onPressed: () async {
+                          await ref.read(hybridControllerProvider.notifier).deleteOfflineChapter(item.photoId);
+                          _loadOffline();
+                        },
+                        child: const Icon(CupertinoIcons.trash, size: 18, color: CupertinoColors.systemRed),
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -444,21 +486,23 @@ class _FolderPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return LiquidSpringControl(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: active ? JmlisColors.accent(context) : JmlisColors.card(context),
+          color: active ? LiquidTokens.scene(context) : LiquidTokens.solid(context),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: active ? JmlisColors.accent(context) : JmlisColors.border(context)),
+          border: Border.all(
+            color: active ? LiquidTokens.scene(context) : LiquidTokens.separator(context),
+          ),
         ),
         child: Text(
           label,
           style: TextStyle(
             fontSize: 12.5,
             fontWeight: FontWeight.w600,
-            color: active ? CupertinoColors.white : JmlisColors.secondaryText(context),
+            color: active ? CupertinoColors.white : LiquidTokens.muted(context),
           ),
         ),
       ),

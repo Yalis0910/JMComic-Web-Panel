@@ -1,7 +1,7 @@
 name: jmlis
 description: JMlis — 现代跨平台漫画阅读器 (LAN 服务端 + 外出直连)
 publish_to: "none"
-version: 2.0.0+1
+version: 2.0.1+2
 
 environment:
   sdk: ">=3.4.0 <4.0.0"

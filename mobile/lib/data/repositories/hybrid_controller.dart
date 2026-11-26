@@ -16,12 +16,14 @@ class HybridSettings {
   final String panelToken;
   final ConnectionPreference preference;
   final bool darkMode;
+  final bool showCovers;
 
   const HybridSettings({
     this.serverUrl = 'http://192.168.1.10:8800',
     this.panelToken = '',
     this.preference = ConnectionPreference.auto,
     this.darkMode = false,
+    this.showCovers = true,
   });
 
   HybridSettings copyWith({
@@ -29,12 +31,14 @@ class HybridSettings {
     String? panelToken,
     ConnectionPreference? preference,
     bool? darkMode,
+    bool? showCovers,
   }) =>
       HybridSettings(
         serverUrl: serverUrl ?? this.serverUrl,
         panelToken: panelToken ?? this.panelToken,
         preference: preference ?? this.preference,
         darkMode: darkMode ?? this.darkMode,
+        showCovers: showCovers ?? this.showCovers,
       );
 }
 
@@ -79,6 +83,7 @@ class HybridController extends StateNotifier<HybridState> {
   static const _kPanelToken = 'hybrid_panel_token';
   static const _kPref = 'hybrid_pref';
   static const _kDark = 'hybrid_dark';
+  static const _kShowCovers = 'hybrid_show_covers';
   static const _kHistory = 'hybrid_history';
 
   final DirectJmSource _directSource = DirectJmSource();
@@ -91,6 +96,7 @@ class HybridController extends StateNotifier<HybridState> {
       panelToken: prefs.getString(_kPanelToken) ?? '',
       preference: ConnectionPreference.values[prefIdx.clamp(0, 2)],
       darkMode: prefs.getBool(_kDark) ?? false,
+      showCovers: prefs.getBool(_kShowCovers) ?? true,
     );
     final rawHist = prefs.getString(_kHistory);
     final histList = rawHist == null
@@ -113,13 +119,19 @@ class HybridController extends StateNotifier<HybridState> {
   }
 
   Future<void> updateSettings(HybridSettings next) async {
+    final prev = state.settings;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kServerUrl, next.serverUrl);
     await prefs.setString(_kPanelToken, next.panelToken);
     await prefs.setInt(_kPref, next.preference.index);
     await prefs.setBool(_kDark, next.darkMode);
+    await prefs.setBool(_kShowCovers, next.showCovers);
     state = state.copyWith(settings: next);
-    await probeAndSwitch();
+    if (prev.serverUrl != next.serverUrl ||
+        prev.panelToken != next.panelToken ||
+        prev.preference != next.preference) {
+      await probeAndSwitch();
+    }
   }
 
   Future<void> probeAndSwitch() async {

@@ -330,9 +330,31 @@ class JMProtocolAdapter:
         client = self.get_api_client()
         resp = client.req_api("/week")
         data = resp.res_data if isinstance(resp.res_data, dict) else {}
+
+        raw_cats = data.get("categories", []) or []
+        categories = []
+        for c in raw_cats:
+            if not isinstance(c, dict):
+                continue
+            cid = str(c.get("id", "")).strip()
+            title = str(c.get("title") or "").strip()
+            time_str = str(c.get("time") or "").strip()
+            label = f"{time_str} · {title}" if (time_str and title) else (title or time_str or f"第{cid}期")
+            categories.append({**c, "id": cid, "title": label, "time": time_str})
+
+        type_fallbacks = {"manga": "日漫", "hanman": "韩漫", "another": "其他"}
+        raw_types = data.get("type", []) or []
+        types = []
+        for t in raw_types:
+            if not isinstance(t, dict):
+                continue
+            tid = str(t.get("id", "")).strip()
+            title = str(t.get("title") or "").strip() or type_fallbacks.get(tid, tid)
+            types.append({**t, "id": tid, "title": title})
+
         return {
-            "categories": data.get("categories", []),
-            "types": data.get("type", []),
+            "categories": categories,
+            "types": types,
         }
 
     def get_week_filter(self, category_id: str, type_id: str = "manga") -> Dict[str, Any]:

@@ -1,11 +1,12 @@
 import 'dart:typed_data';
-import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
+import '../theme/liquid_glass_theme.dart';
+import '../widgets/liquid_glass.dart';
 
 enum MobileReaderMode { vertical, singleLtr, singleRtl }
 
@@ -125,8 +126,11 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final topPad = MediaQuery.of(context).padding.top;
+    final bottomPad = MediaQuery.of(context).padding.bottom;
+
     return CupertinoPageScaffold(
-      backgroundColor: CupertinoColors.black,
+      backgroundColor: const Color(0xFF080D10),
       child: Stack(
         children: [
           GestureDetector(
@@ -155,96 +159,125 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         ),
                       ),
           ),
-          if (_hudVisible)
-            Positioned(
-              top: 0,
-              left: 0,
-              right: 0,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    color: CupertinoColors.black.withValues(alpha: 0.7),
-                    padding: EdgeInsets.only(
-                      top: MediaQuery.of(context).padding.top + 6,
-                      bottom: 10,
-                      left: 12,
-                      right: 12,
-                    ),
-                    child: Row(
-                      children: [
-                        CupertinoButton(
-                          padding: EdgeInsets.zero,
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Icon(CupertinoIcons.back, color: CupertinoColors.white),
+          // Floating Liquid Glass Top Capsule HUD
+          Positioned(
+            top: topPad + 10,
+            left: 14,
+            right: 14,
+            child: AnimatedSlide(
+              offset: _hudVisible ? Offset.zero : const Offset(0, -1.6),
+              duration: LiquidTokens.releaseDuration,
+              curve: const Cubic(0.26, 1.32, 0.52, 1.0),
+              child: AnimatedOpacity(
+                opacity: _hudVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 220),
+                child: LiquidGlassSurface(
+                  variant: LiquidGlassVariant.clear,
+                  onDarkScene: true,
+                  borderRadius: 999,
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: Row(
+                    children: [
+                      LiquidSpringControl(
+                        onTap: () => Navigator.of(context).pop(),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: CupertinoColors.white.withValues(alpha: 0.14),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(CupertinoIcons.back, size: 18, color: CupertinoColors.white),
                         ),
-                        Expanded(
-                          child: Text(
-                            widget.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: CupertinoColors.white, fontSize: 14.5, fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          widget.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: CupertinoColors.white,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        Text(
-                          '${_images.isEmpty ? 0 : _currentPage + 1}/${_images.length}',
-                          style: TextStyle(color: CupertinoColors.white.withValues(alpha: 0.78), fontSize: 12.5),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: CupertinoColors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(999),
                         ),
-                      ],
-                    ),
+                        child: Text(
+                          '${_images.isEmpty ? 0 : _currentPage + 1}/${_images.length}',
+                          style: const TextStyle(
+                            color: LiquidTokens.lightIce,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
             ),
-          if (_hudVisible && _images.isNotEmpty)
+          ),
+          // Floating Liquid Glass Bottom Capsule HUD
+          if (_images.isNotEmpty)
             Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: ClipRect(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                  child: Container(
-                    color: CupertinoColors.black.withValues(alpha: 0.72),
-                    padding: EdgeInsets.fromLTRB(
-                      16,
-                      10,
-                      16,
-                      MediaQuery.of(context).padding.bottom + 12,
-                    ),
+              left: 14,
+              right: 14,
+              bottom: bottomPad > 0 ? bottomPad + 8 : 14,
+              child: AnimatedSlide(
+                offset: _hudVisible ? Offset.zero : const Offset(0, 1.6),
+                duration: LiquidTokens.releaseDuration,
+                curve: const Cubic(0.26, 1.32, 0.52, 1.0),
+                child: AnimatedOpacity(
+                  opacity: _hudVisible ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 220),
+                  child: LiquidGlassSurface(
+                    variant: LiquidGlassVariant.clear,
+                    onDarkScene: true,
+                    borderRadius: LiquidTokens.radiusSheet,
+                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         if (_images.length > 1)
                           Row(
                             children: [
-                              Text('${_currentPage + 1}', style: const TextStyle(color: CupertinoColors.white, fontSize: 12)),
+                              Text(
+                                '${_currentPage + 1}',
+                                style: const TextStyle(color: CupertinoColors.white, fontSize: 12),
+                              ),
                               Expanded(
                                 child: CupertinoSlider(
                                   min: 0,
                                   max: (_images.length - 1).toDouble(),
+                                  activeColor: LiquidTokens.lightIce,
                                   value: _currentPage.toDouble().clamp(0, (_images.length - 1).toDouble()),
                                   onChanged: (v) => _jumpToPage(v.round()),
                                 ),
                               ),
-                              Text('${_images.length}', style: const TextStyle(color: CupertinoColors.white, fontSize: 12)),
+                              Text(
+                                '${_images.length}',
+                                style: const TextStyle(color: CupertinoColors.white, fontSize: 12),
+                              ),
                             ],
                           ),
                         const SizedBox(height: 6),
-                        SizedBox(
-                          width: double.infinity,
-                          child: CupertinoSlidingSegmentedControl<MobileReaderMode>(
-                            groupValue: _mode,
-                            backgroundColor: CupertinoColors.white.withValues(alpha: 0.14),
-                            children: const {
-                              MobileReaderMode.vertical: Text('条漫', style: TextStyle(fontSize: 12)),
-                              MobileReaderMode.singleLtr: Text('左→右', style: TextStyle(fontSize: 12)),
-                              MobileReaderMode.singleRtl: Text('日漫', style: TextStyle(fontSize: 12)),
-                            },
-                            onValueChanged: (v) {
-                              if (v != null) setState(() => _mode = v);
-                            },
-                          ),
+                        LiquidSegmentedPill<MobileReaderMode>(
+                          onDarkScene: true,
+                          value: _mode,
+                          items: const [
+                            (value: MobileReaderMode.vertical, label: '条漫'),
+                            (value: MobileReaderMode.singleLtr, label: '左→右'),
+                            (value: MobileReaderMode.singleRtl, label: '日漫'),
+                          ],
+                          onChanged: (v) => setState(() => _mode = v),
                         ),
                       ],
                     ),

@@ -1,13 +1,13 @@
 # JMlis — 跨平台漫画阅读与管理系统
 
-面向**本地 / 局域网自托管 + 手机外出直连**的双端漫画阅读与管理系统，采用现代 **Apple Editorial / Cupertino 磨砂玻璃** 视觉风格统一设计。
+面向**本地 / 局域网自托管 + 手机外出直连**的双端漫画阅读与管理系统，采用 **Liquid Glass（液态玻璃）** 视觉语言与分层材质规范统一设计（暖纸实体阅读面 + 悬浮清透/着色玻璃操作层）。
 
 ## 工程结构
 
 ```text
 ├── server/          # FastAPI + SQLite 异步本地服务端 (API v2 + SSE + 本地书库)
-├── web/             # React 19 + TypeScript + Vite + Tailwind CSS (iOS 风格响应式面板)
-├── mobile/          # Flutter 原生 Cupertino 混合双模式 App (局域网连服务端 / 外出直连禁漫)
+├── web/             # React 19 + TypeScript + Vite + Tailwind CSS (Liquid Glass 悬浮胶囊面板)
+├── mobile/          # Flutter Liquid Glass + Cupertino 混合双模式 App (局域网连服务端 / 外出直连禁漫)
 ├── .github/         # GitHub Actions 云端自动构建 Android APK 与全端测试
 └── start-panel.bat  # Windows 一键启动脚本
 ```
@@ -21,10 +21,11 @@
 - **SQLite + SSE**：下载任务队列与阅读历史持久化到 SQLite，支持 SSE 实时进度推送及多端 LWW（Last-Write-Wins）增量进度同步；支持可选局域网 PIN 码锁保护。
 
 ### 2. Web 端 (`web/`)
-- 遵循 **Apple HIG** 视觉规范：Light / Dark 自适应、`0.5px` 分割线、毛玻璃侧边栏与移动端底栏、Inset Grouped 分组列表、Segmented Control、Bottom Sheet。
-- **全新多模式阅读器**：支持纵向条漫、单页左→右、单页日漫右→左、双页跨页四种模式，支持并发预加载、单页失败重试、缩略图抽屉与快捷键。
+- **Liquid Glass 视觉与光学体系**：采用暖纸白 `#F3F2ED` / 深海夜读 `#0E1619` 自适应主题，遵循「操作层使用玻璃，正文留在实体面」原则；桌面端配备**顶部居中悬浮胶囊 Dock**（带弹簧滑动指示器与 `Ctrl K` 着色玻璃快捷搜索弹窗），移动端配备**顶部/底部悬浮双胶囊栏**；在 Chromium 内核浏览器中启用基于解析圆角法线的 SVG `<feDisplacementMap>` 实时边缘折光与 `1px` 定向高光，其余浏览器平滑降级为一致磨砂质感。
+- **全新多模式阅读器**：配备脱离边缘的双悬浮 Liquid Glass 胶囊 HUD，支持纵向条漫、单页左→右、单页日漫右→左、双页跨页四种模式，支持并发预加载、单页失败重试、缩略图抽屉与快捷键。
 
 ### 3. 混合模式 App (`mobile/`)
+- **Liquid Glass 移动端体验**：采用定制 `LiquidGlassSurface`（`BackdropFilter` + `1px` 定向高光描边）、`SpringSimulation` 按压/拖拽伸展/420ms 回弹手感，以及支持横向滑动切换的底部悬浮液态玻璃胶囊底栏 `LiquidCapsuleNavBar`，配合 Deep Sea 氛围头图与舒适 2 列实体阅读卡片。
 - **局域网模式（LAN Server）**：连接本地 `server/`，享受磁盘缓存加速、本地已下载书库直读、服务端下载控制及进度双向合并。
 - **外出直连模式（Direct JM）**：离开局域网自动切换为手机直连禁漫，内置 Dart 版 `JmCrypto`（Token 签名 + AES-ECB 解密）与 `JmImageDecoder`（Isolate 后台条带还原），支持章节离线缓存，回连局域网后自动同步阅读进度。
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAppStore, type ReaderMode, type ThemeMode } from '../../stores/useAppStore';
-import { InsetGroup, InsetRow, IosSwitch, SegmentedControl } from '../../components/ios/IosControls';
+import { InsetGroup, InsetRow, LiquidSwitch, SegmentedControl } from '../../components/liquid/LiquidControls';
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -17,6 +17,8 @@ export function SettingsPage() {
     setFitWidth,
     showThumbStrip,
     setShowThumbStrip,
+    showCovers,
+    setShowCovers,
     showToast,
   } = useAppStore();
 
@@ -94,12 +96,14 @@ export function SettingsPage() {
   const cacheStats = settingsData?.cache;
 
   return (
-    <div className="space-y-6 max-w-3xl">
+    <div className="space-y-7 max-w-3xl">
       <div>
-        <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--liquid-accent)' }}>
           PREFERENCES · JMLIS
         </p>
-        <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">系统设置</h1>
+        <h1 className="text-[32px] sm:text-[38px] font-medium tracking-[-0.03em] leading-[1.12]">
+          系统设置
+        </h1>
       </div>
 
       <InsetGroup title="外观与阅读器（本地即时生效）">
@@ -134,11 +138,16 @@ export function SettingsPage() {
         />
         <InsetRow
           label="图片宽度自适应"
-          right={<IosSwitch checked={fitWidth} onChange={setFitWidth} />}
+          right={<LiquidSwitch checked={fitWidth} onChange={setFitWidth} />}
         />
         <InsetRow
           label="显示缩略图导航"
-          right={<IosSwitch checked={showThumbStrip} onChange={setShowThumbStrip} />}
+          right={<LiquidSwitch checked={showThumbStrip} onChange={setShowThumbStrip} />}
+        />
+        <InsetRow
+          label="显示漫画封面"
+          sublabel="关闭后将隐藏列表、详情与历史中的封面图片"
+          right={<LiquidSwitch checked={showCovers} onChange={setShowCovers} />}
         />
         <InsetRow
           label="预加载页数"
@@ -150,8 +159,8 @@ export function SettingsPage() {
               max={20}
               value={preloadCount}
               onChange={(e) => setPreloadCount(Number(e.target.value))}
-              className="w-20 rounded-lg px-2.5 py-1 text-right text-[14px] tabular-nums outline-none"
-              style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+              className="w-20 rounded-full px-3 py-1.5 text-right text-[14px] tabular-nums outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
             />
           }
         />
@@ -179,8 +188,8 @@ export function SettingsPage() {
               type="text"
               value={downloadDir}
               onChange={(e) => setDownloadDir(e.target.value)}
-              className="w-48 sm:w-72 rounded-lg px-2.5 py-1 text-[13.5px] outline-none"
-              style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+              className="w-48 sm:w-72 rounded-full px-3.5 py-1.5 text-[13.5px] outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
             />
           }
         />
@@ -191,8 +200,8 @@ export function SettingsPage() {
               type="text"
               value={dirRule}
               onChange={(e) => setDirRule(e.target.value)}
-              className="w-48 sm:w-72 rounded-lg px-2.5 py-1 text-[13.5px] outline-none"
-              style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+              className="w-48 sm:w-72 rounded-full px-3.5 py-1.5 text-[13.5px] outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
             />
           }
         />
@@ -205,8 +214,8 @@ export function SettingsPage() {
               max={16}
               value={threadCount}
               onChange={(e) => setThreadCount(Number(e.target.value))}
-              className="w-20 rounded-lg px-2.5 py-1 text-right text-[14px] tabular-nums outline-none"
-              style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+              className="w-20 rounded-full px-3 py-1.5 text-right text-[14px] tabular-nums outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
             />
           }
         />
@@ -223,15 +232,15 @@ export function SettingsPage() {
                 type="number"
                 value={cacheMaxMb}
                 onChange={(e) => setCacheMaxMb(Number(e.target.value))}
-                className="w-20 rounded-lg px-2 py-1 text-right text-[13.5px] tabular-nums outline-none"
-                style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+                className="w-20 rounded-full px-3 py-1.5 text-right text-[13.5px] tabular-nums outline-none liquid-focus-ring"
+                style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
               />
               <input
                 type="number"
                 value={cacheMaxFiles}
                 onChange={(e) => setCacheMaxFiles(Number(e.target.value))}
-                className="w-20 rounded-lg px-2 py-1 text-right text-[13.5px] tabular-nums outline-none"
-                style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+                className="w-20 rounded-full px-3 py-1.5 text-right text-[13.5px] tabular-nums outline-none liquid-focus-ring"
+                style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
               />
             </div>
           }
@@ -240,7 +249,7 @@ export function SettingsPage() {
           label="保存服务端配置"
           onClick={() => saveServerMutation.mutate()}
           right={
-            <span className="text-[14px] font-semibold" style={{ color: 'var(--ios-blue)' }}>
+            <span className="text-[14px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
               {saveServerMutation.isPending ? '保存中...' : '保存'}
             </span>
           }
@@ -266,29 +275,29 @@ export function SettingsPage() {
                 type="button"
                 onClick={() => pinMutation.mutate({ enabled: false })}
                 className="text-[14px] font-medium cursor-pointer"
-                style={{ color: 'var(--ios-red)' }}
+                style={{ color: 'var(--liquid-danger)' }}
               >
                 关闭保护
               </button>
             ) : undefined
           }
         />
-        <div className="px-4 py-3 flex items-center gap-2">
+        <div className="px-5 py-3.5 flex items-center gap-2.5">
           <input
             type="password"
             inputMode="numeric"
             value={newPin}
             onChange={(e) => setNewPin(e.target.value)}
             placeholder="设置至少 4 位数字 PIN..."
-            className="flex-1 rounded-xl px-3 py-2 text-[14px] outline-none"
-            style={{ backgroundColor: 'var(--ios-fill-tertiary)' }}
+            className="flex-1 min-h-[42px] rounded-full px-4 py-2 text-[14px] outline-none liquid-focus-ring"
+            style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
           />
           <button
             type="button"
             disabled={newPin.length < 4}
             onClick={() => pinMutation.mutate({ enabled: true, pin: newPin })}
-            className="px-4 py-2 rounded-xl text-[14px] font-medium text-white cursor-pointer disabled:opacity-40"
-            style={{ backgroundColor: 'var(--ios-blue)' }}
+            className="min-h-[42px] px-5 py-2 rounded-full text-[14px] font-medium text-white cursor-pointer disabled:opacity-40 liquid-tactile"
+            style={{ backgroundColor: 'var(--liquid-scene)' }}
           >
             {pinEnabled ? '修改 PIN' : '开启'}
           </button>

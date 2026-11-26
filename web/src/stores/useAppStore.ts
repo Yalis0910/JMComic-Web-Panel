@@ -22,6 +22,8 @@ interface AppStore {
   setFitWidth: (v: boolean) => void;
   showThumbStrip: boolean;
   setShowThumbStrip: (v: boolean) => void;
+  showCovers: boolean;
+  setShowCovers: (v: boolean) => void;
   pageGap: number;
   setPageGap: (px: number) => void;
 
@@ -55,6 +57,8 @@ export const useAppStore = create<AppStore>()(
       setFitWidth: (fitWidth) => set({ fitWidth }),
       showThumbStrip: true,
       setShowThumbStrip: (showThumbStrip) => set({ showThumbStrip }),
+      showCovers: true,
+      setShowCovers: (showCovers) => set({ showCovers }),
       pageGap: 8,
       setPageGap: (pageGap) => set({ pageGap }),
 
@@ -96,6 +100,7 @@ export const useAppStore = create<AppStore>()(
         preloadCount: state.preloadCount,
         fitWidth: state.fitWidth,
         showThumbStrip: state.showThumbStrip,
+        showCovers: state.showCovers,
         pageGap: state.pageGap,
         recentSearches: state.recentSearches,
         quickTags: state.quickTags,

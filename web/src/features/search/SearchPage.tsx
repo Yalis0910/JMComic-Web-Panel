@@ -4,8 +4,9 @@ import { useQuery } from '@tanstack/react-query';
 import { Search, Sparkles, X } from 'lucide-react';
 import { api } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
-import { ComicCard } from '../../components/ios/ComicCard';
-import { SegmentedControl, SkeletonCardGrid } from '../../components/ios/IosControls';
+import { ComicCard } from '../../components/liquid/ComicCard';
+import { LiquidGlass } from '../../components/liquid/LiquidGlass';
+import { SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 
 export function SearchPage() {
   const [params, setParams] = useSearchParams();
@@ -48,49 +49,46 @@ export function SearchPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <p className="text-[12px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ios-blue)' }}>
+        <p className="text-[12px] font-semibold uppercase tracking-[0.06em]" style={{ color: 'var(--liquid-accent)' }}>
           SEARCH · JMLIS
         </p>
-        <h1 className="text-[30px] sm:text-[34px] font-bold tracking-tight leading-tight">全站搜索</h1>
+        <h1 className="text-[32px] sm:text-[38px] font-medium tracking-[-0.03em] leading-[1.12]">
+          全站搜索
+        </h1>
       </div>
 
+      {/* Glass Search Field */}
       <form
         onSubmit={(e) => {
           e.preventDefault();
           submitSearch(input);
         }}
-        className="flex gap-2.5"
       >
-        <div className="relative flex-1">
-          <Search
-            className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2"
-            style={{ color: 'var(--ios-label-secondary)' }}
-          />
-          <input
-            type="search"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="关键词、JM 车号、+包含 -排除..."
-            className="w-full rounded-[14px] pl-11 pr-4 py-3 text-[15px] outline-none focus:ring-2 focus:ring-[var(--ios-blue)]/30"
-            style={{
-              backgroundColor: 'var(--ios-bg-secondary)',
-              border: '1px solid var(--ios-separator)',
-              boxShadow: 'var(--ios-shadow-sm)',
-            }}
-          />
-        </div>
-        <button
-          type="submit"
-          className="px-6 rounded-[14px] text-[14.5px] font-semibold text-white cursor-pointer"
-          style={{ background: 'var(--brand-gradient)' }}
-        >
-          搜索
-        </button>
+        <LiquidGlass variant="tinted" radius={999} className="p-1.5">
+          <div className="flex items-center gap-2 pl-3.5 pr-1">
+            <Search className="w-4.5 h-4.5 shrink-0" style={{ color: 'var(--liquid-muted)' }} />
+            <input
+              type="search"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="关键词、JM 车号、+包含 -排除..."
+              className="flex-1 min-h-[44px] bg-transparent text-[15px] outline-none"
+              style={{ color: 'var(--liquid-ink)' }}
+            />
+            <button
+              type="submit"
+              className="min-h-[42px] px-6 rounded-full text-[14px] font-semibold text-white cursor-pointer liquid-tactile liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-scene)' }}
+            >
+              搜索
+            </button>
+          </div>
+        </LiquidGlass>
       </form>
 
-      <div className="ios-card p-3.5 flex flex-wrap items-center gap-3">
+      <LiquidGlass variant="tinted" radius={24} className="p-3.5 flex flex-wrap items-center gap-3">
         <SegmentedControl
           value={searchType}
           onChange={(v) => {
@@ -118,19 +116,19 @@ export function SearchPage() {
             { value: 'mp', label: '页数' },
           ]}
         />
-      </div>
+      </LiquidGlass>
 
       {!queryText && (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-2">
           {recentSearches.length > 0 && (
-            <section className="ios-card p-5 space-y-3">
+            <section className="liquid-solid-card p-6 space-y-3.5">
               <div className="flex items-center justify-between">
-                <h2 className="text-[15px] font-semibold">最近搜索</h2>
+                <h2 className="text-[16px] font-semibold">最近搜索</h2>
                 <button
                   type="button"
                   onClick={clearRecentSearches}
                   className="text-[12.5px] font-medium cursor-pointer"
-                  style={{ color: 'var(--ios-blue)' }}
+                  style={{ color: 'var(--liquid-accent)' }}
                 >
                   清空
                 </button>
@@ -139,8 +137,11 @@ export function SearchPage() {
                 {recentSearches.map((item) => (
                   <div
                     key={item}
-                    className="inline-flex items-center gap-1.5 pl-3 pr-2 py-1.5 rounded-full text-[13px]"
-                    style={{ backgroundColor: 'var(--ios-fill-tertiary)', border: '1px solid var(--ios-separator)' }}
+                    className="inline-flex items-center gap-1.5 pl-3.5 pr-2.5 py-1.5 rounded-full text-[13px]"
+                    style={{
+                      backgroundColor: 'var(--liquid-fill-soft)',
+                      border: '1px solid var(--liquid-separator)',
+                    }}
                   >
                     <button type="button" onClick={() => submitSearch(item)} className="cursor-pointer font-medium">
                       {item}
@@ -158,10 +159,10 @@ export function SearchPage() {
             </section>
           )}
 
-          <section className="ios-card p-5 space-y-3">
+          <section className="liquid-solid-card p-6 space-y-3.5">
             <div className="flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" style={{ color: 'var(--ios-orange)' }} />
-              <h2 className="text-[15px] font-semibold">热门标签与搜索技巧</h2>
+              <Sparkles className="w-4 h-4" style={{ color: 'var(--liquid-accent)' }} />
+              <h2 className="text-[16px] font-semibold">热门标签与搜索技巧</h2>
             </div>
             <div className="flex flex-wrap gap-2">
               {quickTags.map((tag) => (
@@ -169,15 +170,16 @@ export function SearchPage() {
                   key={tag}
                   type="button"
                   onClick={() => submitSearch(tag, 'tag')}
-                  className="px-3 py-1.5 rounded-full text-[12.5px] font-medium cursor-pointer transition-colors"
-                  style={{ backgroundColor: 'var(--ios-accent-soft)', color: 'var(--ios-blue)' }}
+                  className="min-h-[34px] px-3.5 py-1 rounded-full text-[12.5px] font-medium cursor-pointer liquid-tactile"
+                  style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
                 >
                   #{tag}
                 </button>
               ))}
             </div>
-            <p className="text-[12px] leading-relaxed" style={{ color: 'var(--ios-label-secondary)' }}>
-              提示：支持直接输入 JM 数字车号跳转；使用 <code className="px-1 rounded bg-black/5 dark:bg-white/10">+标签 -排除词</code> 可精确组合检索。
+            <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--liquid-muted)' }}>
+              提示：支持直接输入 JM 数字车号跳转；使用{' '}
+              <code className="px-1.5 py-0.5 rounded bg-black/5 dark:bg-white/10">+标签 -排除词</code> 可精确组合检索。
             </p>
           </section>
         </div>
@@ -186,39 +188,39 @@ export function SearchPage() {
       {isLoading && <SkeletonCardGrid count={10} />}
 
       {error && (
-        <div className="ios-card p-8 text-center text-[14px]" style={{ color: 'var(--ios-red)' }}>
+        <div className="liquid-solid-card p-8 text-center text-[14px]" style={{ color: 'var(--liquid-danger)' }}>
           搜索失败：{(error as Error).message}
         </div>
       )}
 
       {data && (
         <>
-          <div className="text-[13px] font-medium" style={{ color: 'var(--ios-label-secondary)' }}>
-            共找到 <span className="tabular-nums font-semibold" style={{ color: 'var(--ios-label-primary)' }}>{data.total}</span> 条结果
+          <div className="text-[13px] font-medium" style={{ color: 'var(--liquid-muted)' }}>
+            共找到 <span className="tabular-nums font-semibold" style={{ color: 'var(--liquid-ink)' }}>{data.total}</span> 条结果
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
             {data.albums.map((a) => (
               <ComicCard key={a.album_id} album={a} />
             ))}
           </div>
           {data.page_count > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-2">
+            <div className="flex items-center justify-center gap-3 pt-3">
               <button
                 type="button"
                 disabled={initialPage <= 1}
                 onClick={() =>
                   setParams({ q: queryText, type: searchType, page: String(initialPage - 1), order: orderBy, time: timeRange })
                 }
-                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
-                  backgroundColor: 'var(--ios-bg-secondary)',
-                  border: '1px solid var(--ios-separator)',
-                  boxShadow: 'var(--ios-shadow-sm)',
+                  backgroundColor: 'var(--liquid-solid)',
+                  border: '1px solid var(--liquid-separator)',
+                  boxShadow: 'var(--liquid-shadow-card)',
                 }}
               >
                 上一页
               </button>
-              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--ios-label-secondary)' }}>
+              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
                 第 {initialPage} / {data.page_count} 页
               </span>
               <button
@@ -227,11 +229,11 @@ export function SearchPage() {
                 onClick={() =>
                   setParams({ q: queryText, type: searchType, page: String(initialPage + 1), order: orderBy, time: timeRange })
                 }
-                className="px-4 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer"
+                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
                 style={{
-                  backgroundColor: 'var(--ios-bg-secondary)',
-                  border: '1px solid var(--ios-separator)',
-                  boxShadow: 'var(--ios-shadow-sm)',
+                  backgroundColor: 'var(--liquid-solid)',
+                  border: '1px solid var(--liquid-separator)',
+                  boxShadow: 'var(--liquid-shadow-card)',
                 }}
               >
                 下一页

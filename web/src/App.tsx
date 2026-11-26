@@ -3,8 +3,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import { api, ApiError } from './api/client';
 import { useAppStore } from './stores/useAppStore';
-import { IosLayout } from './components/ios/IosLayout';
-import { PinLockScreen } from './components/ios/PinLockScreen';
+import { LiquidLayout } from './components/liquid/LiquidLayout';
+import { PinLockScreen } from './components/liquid/PinLockScreen';
 import { HomePage } from './features/home/HomePage';
 import { ExplorePage } from './features/explore/ExplorePage';
 import { SearchPage } from './features/search/SearchPage';
@@ -39,6 +39,10 @@ function ThemeWatcher() {
         theme === 'dark' ||
         (theme === 'system' && window.matchMedia?.('(prefers-color-scheme: dark)').matches);
       document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      const meta = document.querySelector('meta[name="theme-color"]');
+      if (meta) {
+        meta.setAttribute('content', dark ? '#0E1619' : '#F3F2ED');
+      }
     };
     apply();
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
@@ -75,7 +79,7 @@ function AppShell() {
 
   return (
     <Routes>
-      <Route element={<IosLayout />}>
+      <Route element={<LiquidLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/search" element={<SearchPage />} />

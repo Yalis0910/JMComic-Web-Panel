@@ -1,0 +1,298 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: light;
+
+  /* StyleKit Liquid Glass Palette — Light (Warm Paper & Deep Sea) */
+  --liquid-paper: #F3F2ED;
+  --liquid-solid: #FCFCFA;
+  --liquid-solid-elevated: #FFFFFF;
+  --liquid-ink: #202929;
+  --liquid-muted: #4C5D57;
+  --liquid-subtle: rgba(32, 41, 41, 0.48);
+
+  --liquid-scene: #25414A;
+  --liquid-scene-deep: #172B32;
+  --liquid-mist: #E4EFEB;
+  --liquid-ice: #C7E4E5;
+  --liquid-focus: #557B79;
+  --liquid-focus-soft: rgba(85, 123, 121, 0.14);
+  --liquid-accent: #25414A;
+  --liquid-accent-hover: #1C3239;
+
+  /* Surface Tiers */
+  --liquid-clear-fill: rgba(255, 255, 255, 0.16);
+  --liquid-clear-on-paper: rgba(247, 248, 245, 0.56);
+  --liquid-clear-on-dark: rgba(15, 25, 32, 0.28);
+  --liquid-tinted-fill: rgba(239, 245, 242, 0.86);
+  --liquid-sheet-fill: rgba(252, 252, 250, 0.94);
+
+  /* Optical Rim & Separators */
+  --liquid-glint: rgba(255, 255, 255, 0.78);
+  --liquid-rim: rgba(255, 255, 255, 0.34);
+  --liquid-rim-outer: rgba(32, 41, 41, 0.08);
+  --liquid-separator: rgba(32, 41, 41, 0.09);
+  --liquid-fill-soft: rgba(32, 41, 41, 0.055);
+  --liquid-fill-mid: rgba(32, 41, 41, 0.10);
+
+  /* Semantic */
+  --liquid-success: #2A7B62;
+  --liquid-warning: #B5751C;
+  --liquid-danger: #C53D43;
+
+  /* Elevations & Radii */
+  --liquid-shadow-card: 0 6px 20px -6px rgba(19, 37, 41, 0.07), 0 1px 3px rgba(19, 37, 41, 0.04);
+  --liquid-shadow-control: 0 8px 24px rgba(19, 37, 41, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  --liquid-shadow-panel: 0 16px 40px rgba(19, 37, 41, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.78);
+
+  --liquid-radius-pill: 999px;
+  --liquid-radius-card: 24px;
+  --liquid-radius-sheet: 28px;
+
+  /* Motion */
+  --liquid-press: 110ms;
+  --liquid-release: 420ms cubic-bezier(0.26, 1.55, 0.52, 1);
+  --liquid-ease-out: 240ms cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Skeleton */
+  --skeleton-base: rgba(32, 41, 41, 0.08);
+  --skeleton-shine: rgba(255, 255, 255, 0.65);
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* StyleKit Liquid Glass Palette — Dark (Deep Sea Night) */
+  --liquid-paper: #0E1619;
+  --liquid-solid: #162328;
+  --liquid-solid-elevated: #1D2D33;
+  --liquid-ink: #EEF4F2;
+  --liquid-muted: #9AB0AA;
+  --liquid-subtle: rgba(228, 239, 235, 0.45);
+
+  --liquid-scene: #1C343D;
+  --liquid-scene-deep: #0B1418;
+  --liquid-mist: #1E3238;
+  --liquid-ice: #C7E4E5;
+  --liquid-focus: #C7E4E5;
+  --liquid-focus-soft: rgba(199, 228, 229, 0.14);
+  --liquid-accent: #7EB3B0;
+  --liquid-accent-hover: #97C7C4;
+
+  --liquid-clear-fill: rgba(24, 42, 49, 0.34);
+  --liquid-clear-on-paper: rgba(22, 36, 42, 0.62);
+  --liquid-clear-on-dark: rgba(14, 24, 29, 0.42);
+  --liquid-tinted-fill: rgba(17, 29, 37, 0.88);
+  --liquid-sheet-fill: rgba(20, 34, 40, 0.94);
+
+  --liquid-glint: rgba(255, 255, 255, 0.32);
+  --liquid-rim: rgba(255, 255, 255, 0.14);
+  --liquid-rim-outer: rgba(228, 239, 235, 0.10);
+  --liquid-separator: rgba(228, 239, 235, 0.09);
+  --liquid-fill-soft: rgba(228, 239, 235, 0.07);
+  --liquid-fill-mid: rgba(228, 239, 235, 0.13);
+
+  --liquid-success: #45B692;
+  --liquid-warning: #E1A243;
+  --liquid-danger: #E56B6F;
+
+  --liquid-shadow-card: 0 8px 24px -8px rgba(0, 0, 0, 0.42), 0 1px 2px rgba(0, 0, 0, 0.28);
+  --liquid-shadow-control: 0 10px 28px rgba(0, 0, 0, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  --liquid-shadow-panel: 0 18px 46px rgba(0, 0, 0, 0.56), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+
+  --skeleton-base: rgba(228, 239, 235, 0.08);
+  --skeleton-shine: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--liquid-paper);
+  color: var(--liquid-ink);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.5;
+}
+
+/* Subtle editorial paper mesh so floating glass catches gentle contrast */
+.liquid-canvas-backdrop {
+  background-color: var(--liquid-paper);
+  background-image:
+    radial-gradient(960px 420px at 12% -6%, rgba(85, 123, 121, 0.09), transparent 65%),
+    radial-gradient(760px 380px at 92% 4%, rgba(37, 65, 74, 0.07), transparent 60%);
+}
+
+html[data-theme="dark"] .liquid-canvas-backdrop {
+  background-image:
+    radial-gradient(960px 420px at 12% -6%, rgba(126, 179, 176, 0.11), transparent 65%),
+    radial-gradient(760px 380px at 92% 4%, rgba(37, 65, 74, 0.28), transparent 60%);
+}
+
+/* Deep Sea scenic stage with delicate topographic grid lines for clear glass refraction */
+.liquid-scene-stage {
+  background-color: var(--liquid-scene);
+  background-image:
+    radial-gradient(720px 360px at 85% 15%, rgba(199, 228, 229, 0.20), transparent 62%),
+    radial-gradient(560px 320px at 12% 90%, rgba(85, 123, 121, 0.34), transparent 60%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
+}
+
+/* Level 3 — Solid Reading Surface (Cards, Long Forms, Chapters) */
+.liquid-solid-card {
+  background-color: var(--liquid-solid);
+  border-radius: var(--liquid-radius-card);
+  border: 1px solid var(--liquid-rim-outer);
+  box-shadow: var(--liquid-shadow-card);
+}
+
+.liquid-grouped-list {
+  background-color: var(--liquid-solid);
+  border-radius: var(--liquid-radius-card);
+  border: 1px solid var(--liquid-rim-outer);
+  box-shadow: var(--liquid-shadow-card);
+  overflow: hidden;
+}
+
+/* Level 2 — Tinted Glass (Menus, Popovers, Sheets) */
+.liquid-tinted-surface {
+  background-color: var(--liquid-tinted-fill);
+  backdrop-filter: blur(18px) saturate(145%);
+  -webkit-backdrop-filter: blur(18px) saturate(145%);
+  border: 1px solid var(--liquid-rim-outer);
+  box-shadow: var(--liquid-shadow-panel);
+}
+
+/* Tactile Press & Release Physics */
+.liquid-tactile {
+  transition:
+    transform var(--liquid-release),
+    box-shadow var(--liquid-ease-out),
+    background-color var(--liquid-ease-out),
+    border-color var(--liquid-ease-out);
+  will-change: transform;
+}
+
+.liquid-tactile:active {
+  transition-duration: var(--liquid-press);
+  transform: scale(0.96);
+}
+
+.liquid-card-hover {
+  transition: transform var(--liquid-release), box-shadow var(--liquid-ease-out), border-color var(--liquid-ease-out);
+}
+
+.liquid-card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px -10px rgba(19, 37, 41, 0.13), 0 2px 6px rgba(19, 37, 41, 0.05);
+}
+
+html[data-theme="dark"] .liquid-card-hover:hover {
+  box-shadow: 0 16px 36px -10px rgba(0, 0, 0, 0.56), 0 2px 6px rgba(0, 0, 0, 0.32);
+}
+
+.liquid-focus-ring:focus-visible {
+  outline: 2px solid var(--liquid-focus);
+  outline-offset: 2px;
+}
+
+.liquid-hairline-b {
+  border-bottom: 1px solid var(--liquid-separator);
+}
+
+.liquid-hairline-t {
+  border-top: 1px solid var(--liquid-separator);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.safe-bottom {
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--skeleton-base);
+}
+
+.skeleton-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, var(--skeleton-shine), transparent);
+  animation: liquidShimmer 1.45s infinite ease-in-out;
+}
+
+@keyframes liquidShimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes liquidSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes liquidFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-liquid-in {
+  animation: liquidFadeIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-tactile,
+  .liquid-card-hover,
+  .animate-liquid-in {
+    transition: none !important;
+    animation: none !important;
+  }
+  .liquid-tactile:active,
+  .liquid-card-hover:hover {
+    transform: none !important;
+  }
+  .skeleton-shimmer::after {
+    animation: none !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-tinted-surface {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: var(--liquid-solid) !important;
+  }
+}

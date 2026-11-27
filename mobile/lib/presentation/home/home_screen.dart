@@ -77,7 +77,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final featured = _sections.isNotEmpty && _sections.first.albums.isNotEmpty
         ? _sections.first.albums.first
         : null;
-    final crossCount = MediaQuery.of(context).size.width >= 680 ? 3 : 2;
 
     return CupertinoPageScaffold(
       backgroundColor: LiquidTokens.canvas(context),
@@ -470,85 +469,87 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                       ),
                       Text(
-                        '${sec.albums.length} 部',
+                        '${sec.albums.length} 部 · 左右滑动',
                         style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
                       ),
                     ],
                   ),
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossCount,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.60,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, idx) {
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 236,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: sec.albums.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (ctx, idx) {
                       final album = sec.albums[idx];
-                      return ModernComicCard(
-                        album: album,
-                        onTap: () => Navigator.of(context).push(
-                          CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
+                      return SizedBox(
+                        width: 138,
+                        child: ModernComicCard(
+                          album: album,
+                          onTap: () => Navigator.of(context).push(
+                            CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
+                          ),
                         ),
                       );
                     },
-                    childCount: sec.albums.length,
                   ),
                 ),
               ),
             ],
           if (!_loading && _error == null && _latestAlbums.isNotEmpty) ...[
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '最新更新',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: -0.3,
-                          color: LiquidTokens.ink(context),
-                        ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '最新更新',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.3,
+                        color: LiquidTokens.ink(context),
                       ),
-                      Text(
-                        '${_latestAlbums.length} 部',
-                        style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
-                      ),
-                    ],
-                  ),
+                    ),
+                    Text(
+                      '${_latestAlbums.length} 部 · 左右滑动',
+                      style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
+                    ),
+                  ],
                 ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: SliverGrid(
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossCount,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 0.60,
-                  ),
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, idx) {
-                      final album = _latestAlbums[idx];
-                      return ModernComicCard(
+            ),
+            SliverToBoxAdapter(
+              child: SizedBox(
+                height: 236,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: _latestAlbums.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (ctx, idx) {
+                    final album = _latestAlbums[idx];
+                    return SizedBox(
+                      width: 138,
+                      child: ModernComicCard(
                         album: album,
                         onTap: () => Navigator.of(context).push(
                           CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
                         ),
-                      );
-                    },
-                    childCount: _latestAlbums.length,
-                  ),
+                      ),
+                    );
+                  },
                 ),
               ),
-            ],
+            ),
+          ],
           const SliverToBoxAdapter(child: SizedBox(height: 112)),
         ],
       ),

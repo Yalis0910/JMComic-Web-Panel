@@ -333,7 +333,7 @@ class PagedComicsResult {
     this.albums = const [],
     this.total = 0,
     this.pageCount = 1,
-    this.pageSize = 80,
+    this.pageSize = 40,
   });
 }
 

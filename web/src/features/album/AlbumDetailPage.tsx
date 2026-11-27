@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { api, type CommentItem, type DownloadTask } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
-import { BottomSheet, InsetGroup, InsetRow } from '../../components/liquid/LiquidControls';
+import { BottomSheet, InsetGroup, InsetRow, PaginationBar } from '../../components/liquid/LiquidControls';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { CommentCard } from '../../components/liquid/CommentCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
@@ -588,29 +588,12 @@ export function AlbumDetailPage() {
                   暂无评论
                 </div>
               )}
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  disabled={commentPage <= 1}
-                  onClick={() => setCommentPage((p) => Math.max(1, p - 1))}
-                  className="min-h-[38px] px-4 py-1.5 rounded-full text-[12.5px] font-medium disabled:opacity-40 cursor-pointer liquid-tactile"
-                  style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
-                >
-                  上一页
-                </button>
-                <span className="text-[12px] tabular-nums" style={{ color: 'var(--liquid-muted)' }}>
-                  第 {commentPage} 页
-                </span>
-                <button
-                  type="button"
-                  disabled={(commentsData?.comments.length || 0) === 0}
-                  onClick={() => setCommentPage((p) => p + 1)}
-                  className="min-h-[38px] px-4 py-1.5 rounded-full text-[12.5px] font-medium disabled:opacity-40 cursor-pointer liquid-tactile"
-                  style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
-                >
-                  下一页
-                </button>
-              </div>
+              <PaginationBar
+                compact
+                page={commentPage}
+                hasNext={(commentsData?.comments.length || 0) > 0}
+                onPageChange={setCommentPage}
+              />
             </div>
           )}
         </div>

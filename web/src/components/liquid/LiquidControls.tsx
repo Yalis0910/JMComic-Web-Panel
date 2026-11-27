@@ -1,4 +1,5 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { LiquidGlass } from './LiquidGlass';
 
@@ -112,11 +113,53 @@ export function PillSelect<T extends string>({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [menuPos, setMenuPos] = useState<{
+    top: number;
+    left: number;
+    minWidth: number;
+    openUp: boolean;
+  } | null>(null);
+
+  const updatePosition = useCallback(() => {
+    const btn = btnRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < 220 && rect.top > 240;
+    const minWidth = Math.max(240, rect.width);
+    const maxAllowedLeft = Math.max(12, window.innerWidth - minWidth - 12);
+    const left = Math.max(12, Math.min(rect.left, maxAllowedLeft));
+    setMenuPos({
+      top: openUp ? rect.top - 8 : rect.bottom + 8,
+      left,
+      minWidth,
+      openUp,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setMenuPos(null);
+      return;
+    }
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, updatePosition]);
 
   useEffect(() => {
     if (!open) return;
     const onDocClick = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const inRoot = rootRef.current?.contains(target) ?? false;
+      const inMenu = menuRef.current?.contains(target) ?? false;
+      if (!inRoot && !inMenu) {
         setOpen(false);
       }
     };
@@ -136,6 +179,7 @@ export function PillSelect<T extends string>({
   return (
     <div ref={rootRef} className={`relative inline-block ${className}`}>
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -154,36 +198,150 @@ export function PillSelect<T extends string>({
         />
       </button>
 
-      {open && (
-        <div className="absolute left-0 mt-2 min-w-[240px] max-w-[340px] z-50 animate-liquid-in">
-          <LiquidGlass variant="tinted" radius={24} className="p-1.5">
-            <div className="max-h-72 overflow-y-auto space-y-0.5">
-              {options.map((opt) => {
-                const active = opt.value === value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => {
-                      onChange(opt.value);
-                      setOpen(false);
-                    }}
-                    className="w-full min-h-[42px] flex items-center justify-between gap-2 px-3.5 py-2 rounded-[16px] text-[13.5px] text-left cursor-pointer transition-colors liquid-focus-ring"
-                    style={{
-                      backgroundColor: active ? 'var(--liquid-focus-soft)' : 'transparent',
-                      color: active ? 'var(--liquid-accent)' : 'var(--liquid-ink)',
-                      fontWeight: active ? 600 : 400,
-                    }}
-                  >
-                    <span className="truncate">{opt.label}</span>
-                    {active && <Check className="w-4 h-4 shrink-0" />}
-                  </button>
-                );
-              })}
-            </div>
-          </LiquidGlass>
-        </div>
-      )}
+      {open &&
+        menuPos &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={menuRef}
+            className="fixed z-[70] max-w-[340px] animate-liquid-in"
+            style={{
+              top: menuPos.top,
+              left: menuPos.left,
+              minWidth: menuPos.minWidth,
+              transform: menuPos.openUp ? 'translateY(-100%)' : undefined,
+            }}
+          >
+            <LiquidGlass variant="tinted" radius={24} className="p-1.5">
+              <div className="max-h-72 overflow-y-auto space-y-0.5">
+                {options.map((opt) => {
+                  const active = opt.value === value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        onChange(opt.value);
+                        setOpen(false);
+                      }}
+                      className="w-full min-h-[42px] flex items-center justify-between gap-2 px-3.5 py-2 rounded-[16px] text-[13.5px] text-left cursor-pointer transition-colors liquid-focus-ring"
+                      style={{
+                        backgroundColor: active ? 'var(--liquid-focus-soft)' : 'transparent',
+                        color: active ? 'var(--liquid-accent)' : 'var(--liquid-ink)',
+                        fontWeight: active ? 600 : 400,
+                      }}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {active && <Check className="w-4 h-4 shrink-0" />}
+                    </button>
+                  );
+                })}
+              </div>
+            </LiquidGlass>
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}
+
+export function PaginationBar({
+  page,
+  pageCount,
+  hasNext,
+  onPageChange,
+  compact = false,
+}: {
+  page: number;
+  pageCount?: number;
+  hasNext?: boolean;
+  onPageChange: (nextPage: number) => void;
+  compact?: boolean;
+}) {
+  const [jumpInput, setJumpInput] = useState(String(page));
+
+  useEffect(() => {
+    setJumpInput(String(page));
+  }, [page]);
+
+  const canNext = pageCount && pageCount > 0 ? page < pageCount : (hasNext ?? true);
+  const btnHeight = compact ? 'min-h-[38px] px-4 py-1.5 text-[12.5px]' : 'min-h-[42px] px-5 py-2 text-[13.5px]';
+
+  const submitJump = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = parseInt(jumpInput.trim(), 10);
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      setJumpInput(String(page));
+      return;
+    }
+    const target = pageCount && pageCount > 0 ? Math.min(pageCount, parsed) : parsed;
+    setJumpInput(String(target));
+    if (target !== page) {
+      onPageChange(target);
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-3 pt-3">
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onPageChange(Math.max(1, page - 1))}
+        className={`${btnHeight} rounded-full font-semibold disabled:opacity-40 cursor-pointer liquid-tactile`}
+        style={{
+          backgroundColor: 'var(--liquid-solid)',
+          border: '1px solid var(--liquid-separator)',
+          boxShadow: 'var(--liquid-shadow-card)',
+        }}
+      >
+        上一页
+      </button>
+
+      <span className="text-[13px] font-medium tabular-nums px-2" style={{ color: 'var(--liquid-muted)' }}>
+        {pageCount && pageCount > 0 ? `第 ${page} / ${pageCount} 页` : `第 ${page} 页`}
+      </span>
+
+      <button
+        type="button"
+        disabled={!canNext}
+        onClick={() => onPageChange(page + 1)}
+        className={`${btnHeight} rounded-full font-semibold disabled:opacity-40 cursor-pointer liquid-tactile`}
+        style={{
+          backgroundColor: 'var(--liquid-solid)',
+          border: '1px solid var(--liquid-separator)',
+          boxShadow: 'var(--liquid-shadow-card)',
+        }}
+      >
+        下一页
+      </button>
+
+      <form onSubmit={submitJump} className="inline-flex items-center gap-1.5">
+        <input
+          type="number"
+          min={1}
+          max={pageCount && pageCount > 0 ? pageCount : undefined}
+          inputMode="numeric"
+          value={jumpInput}
+          onChange={(e) => setJumpInput(e.target.value)}
+          aria-label="跳转到指定页"
+          className={`${compact ? 'w-14 h-[36px]' : 'w-16 h-[40px]'} rounded-full px-3 text-center text-[13px] tabular-nums outline-none liquid-focus-ring`}
+          style={{
+            backgroundColor: 'var(--liquid-solid)',
+            border: '1px solid var(--liquid-separator)',
+            color: 'var(--liquid-ink)',
+          }}
+        />
+        <button
+          type="submit"
+          className={`${compact ? 'min-h-[36px] px-3.5 text-[12.5px]' : 'min-h-[40px] px-4 text-[13px]'} rounded-full font-semibold cursor-pointer liquid-tactile`}
+          style={{
+            backgroundColor: 'var(--liquid-focus-soft)',
+            color: 'var(--liquid-accent)',
+          }}
+        >
+          跳转
+        </button>
+      </form>
     </div>
   );
 }

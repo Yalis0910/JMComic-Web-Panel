@@ -3,11 +3,12 @@ import html
 import io
 import json
 import logging
+import math
 import re
 import threading
 import time
 from html.parser import HTMLParser
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from jmcomic import JmMagicConstants, JmOption, JmcomicText
 
@@ -169,6 +170,8 @@ class JMProtocolAdapter:
         self._password_enc: str = ""
         self._login_time: float = 0.0
         self._profile: Dict[str, Any] = {}
+        self._paged_cache: Dict[Tuple[Any, ...], Tuple[float, Dict[str, Any]]] = {}
+        self._paged_cache_ttl: float = 60.0
         self._restore_session()
 
     def _build_option(self, impl: Optional[str] = None, cookies: Optional[Dict[str, str]] = None) -> JmOption:
@@ -436,7 +439,75 @@ class JMProtocolAdapter:
             "sub_categories": sub_categories,
         }
 
-    def get_ranking(self, ranking_type: str, page: int = 1, category: str = "0") -> Dict[str, Any]:
+    def _fetch_virtual_paged(
+        self,
+        cache_key_base: Tuple[Any, ...],
+        page: int,
+        page_size: int,
+        is_html: bool,
+        fetch_upstream: Callable[[int], Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """将上游固定页大小（API 端 80 条 / HTML 端 20 条）映射为指定 page_size（默认 40）并缓存 60s。"""
+        target_size = max(5, min(80, int(page_size)))
+        upstream_size = 20 if is_html else 80
+
+        if upstream_size <= target_size:
+            upstream_page = page
+            offset = 0
+        else:
+            upstream_page = ((page - 1) * target_size) // upstream_size + 1
+            offset = ((page - 1) * target_size) % upstream_size
+
+        now = time.monotonic()
+        full_key = (*cache_key_base, upstream_page)
+        cached_entry: Optional[Dict[str, Any]] = None
+        with self._lock:
+            hit = self._paged_cache.get(full_key)
+            if hit and (now - hit[0]) < self._paged_cache_ttl:
+                cached_entry = hit[1]
+
+        if cached_entry is None:
+            cached_entry = fetch_upstream(upstream_page)
+            with self._lock:
+                if len(self._paged_cache) >= 64:
+                    expired = [k for k, (ts, _) in self._paged_cache.items() if (now - ts) >= self._paged_cache_ttl]
+                    for k in expired:
+                        self._paged_cache.pop(k, None)
+                    if len(self._paged_cache) >= 64:
+                        oldest_key = min(self._paged_cache, key=lambda k: self._paged_cache[k][0])
+                        self._paged_cache.pop(oldest_key, None)
+                self._paged_cache[full_key] = (now, cached_entry)
+
+        all_albums = cached_entry.get("albums") or []
+        raw_total = int(cached_entry.get("total") or 0)
+        if upstream_size <= target_size:
+            eff_size = int(cached_entry.get("page_size") or len(all_albums) or target_size)
+            eff_total = max(raw_total, len(all_albums))
+            eff_pages = int(cached_entry.get("page_count") or max(1, math.ceil(eff_total / max(1, eff_size))))
+            return {
+                "albums": all_albums,
+                "total": eff_total,
+                "page_count": eff_pages,
+                "page_size": eff_size,
+            }
+
+        sliced = all_albums[offset : offset + target_size]
+        eff_total = max(raw_total, (upstream_page - 1) * upstream_size + len(all_albums))
+        eff_pages = max(1, math.ceil(eff_total / target_size)) if eff_total > 0 else 1
+        return {
+            "albums": sliced,
+            "total": eff_total,
+            "page_count": eff_pages,
+            "page_size": target_size,
+        }
+
+    def get_ranking(
+        self,
+        ranking_type: str,
+        page: int = 1,
+        category: str = "0",
+        page_size: int = 40,
+    ) -> Dict[str, Any]:
         cat = "0" if category == "ALL" else category
         sub_cat: Optional[str] = None
         if cat == "3D":
@@ -444,52 +515,63 @@ class JMProtocolAdapter:
         elif cat == "another_cosplay":
             cat = JmMagicConstants.CATEGORY_DOUJIN_COSPLAY
 
+        is_html = bool(sub_cat) or (config_manager.get_settings().client_impl == "html")
         client = self.get_html_client() if sub_cat else self.get_client()
-        if ranking_type == "day":
-            res = (
-                client.categories_filter(page, JmMagicConstants.TIME_TODAY, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
-                if sub_cat
-                else client.day_ranking(page=page, category=cat)
-            )
-        elif ranking_type == "week":
-            res = (
-                client.categories_filter(page, JmMagicConstants.TIME_WEEK, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
-                if sub_cat
-                else client.week_ranking(page=page, category=cat)
-            )
-        elif ranking_type == "month":
-            res = (
-                client.categories_filter(page, JmMagicConstants.TIME_MONTH, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
-                if sub_cat
-                else client.month_ranking(page=page, category=cat)
-            )
-        elif ranking_type == "all":
-            res = client.categories_filter(
-                page=page,
-                time=JmMagicConstants.TIME_ALL,
-                category=cat,
-                order_by=JmMagicConstants.ORDER_BY_VIEW,
-                sub_category=sub_cat,
-            )
-        elif ranking_type == "likes":
-            res = client.categories_filter(
-                page=page,
-                time=JmMagicConstants.TIME_ALL,
-                category=cat,
-                order_by=JmMagicConstants.ORDER_BY_LIKE,
-                sub_category=sub_cat,
-            )
-        elif ranking_type == "latest":
-            res = client.categories_filter(
-                page=page,
-                time=JmMagicConstants.TIME_ALL,
-                category=cat,
-                order_by=JmMagicConstants.ORDER_BY_LATEST,
-                sub_category=sub_cat,
-            )
-        else:
-            raise ValueError(f"不支持的排行类型: {ranking_type}")
-        return _format_page_albums(res)
+
+        def _fetch(up_page: int) -> Dict[str, Any]:
+            if ranking_type == "day":
+                res = (
+                    client.categories_filter(up_page, JmMagicConstants.TIME_TODAY, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                    if sub_cat
+                    else client.day_ranking(page=up_page, category=cat)
+                )
+            elif ranking_type == "week":
+                res = (
+                    client.categories_filter(up_page, JmMagicConstants.TIME_WEEK, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                    if sub_cat
+                    else client.week_ranking(page=up_page, category=cat)
+                )
+            elif ranking_type == "month":
+                res = (
+                    client.categories_filter(up_page, JmMagicConstants.TIME_MONTH, cat, JmMagicConstants.ORDER_BY_VIEW, sub_cat)
+                    if sub_cat
+                    else client.month_ranking(page=up_page, category=cat)
+                )
+            elif ranking_type == "all":
+                res = client.categories_filter(
+                    page=up_page,
+                    time=JmMagicConstants.TIME_ALL,
+                    category=cat,
+                    order_by=JmMagicConstants.ORDER_BY_VIEW,
+                    sub_category=sub_cat,
+                )
+            elif ranking_type == "likes":
+                res = client.categories_filter(
+                    page=up_page,
+                    time=JmMagicConstants.TIME_ALL,
+                    category=cat,
+                    order_by=JmMagicConstants.ORDER_BY_LIKE,
+                    sub_category=sub_cat,
+                )
+            elif ranking_type == "latest":
+                res = client.categories_filter(
+                    page=up_page,
+                    time=JmMagicConstants.TIME_ALL,
+                    category=cat,
+                    order_by=JmMagicConstants.ORDER_BY_LATEST,
+                    sub_category=sub_cat,
+                )
+            else:
+                raise ValueError(f"不支持的排行类型: {ranking_type}")
+            return _format_page_albums(res)
+
+        return self._fetch_virtual_paged(
+            ("ranking", ranking_type, cat, sub_cat or "", "html" if is_html else "api"),
+            page,
+            page_size,
+            is_html,
+            _fetch,
+        )
 
     def get_category_filter(
         self,
@@ -498,6 +580,7 @@ class JMProtocolAdapter:
         category: str = "0",
         order_by: str = "mv",
         sub_category: Optional[str] = None,
+        page_size: int = 40,
     ) -> Dict[str, Any]:
         cat = "0" if category == "ALL" else category
         sub_cat = sub_category
@@ -510,16 +593,27 @@ class JMProtocolAdapter:
             JmMagicConstants.ORDER_BY_SCORE,
             JmMagicConstants.ORDER_BY_COMMENT,
         )
+        is_html = use_html or (config_manager.get_settings().client_impl == "html")
         client = self.get_html_client() if use_html else self.get_client()
         t = JmMagicConstants.TIME_ALL if time_range in ("ALL", "", "a") else time_range
-        res = client.categories_filter(
-            page=page,
-            time=t,
-            category=cat,
-            order_by=order_by,
-            sub_category=sub_cat,
+
+        def _fetch(up_page: int) -> Dict[str, Any]:
+            res = client.categories_filter(
+                page=up_page,
+                time=t,
+                category=cat,
+                order_by=order_by,
+                sub_category=sub_cat,
+            )
+            return _format_page_albums(res)
+
+        return self._fetch_virtual_paged(
+            ("filter", t, cat, order_by, sub_cat or "", "html" if is_html else "api"),
+            page,
+            page_size,
+            is_html,
+            _fetch,
         )
-        return _format_page_albums(res)
 
     # ---------- 搜索 ----------
 
@@ -532,6 +626,7 @@ class JMProtocolAdapter:
         time_range: str = "a",
         category: str = "0",
         sub_category: Optional[str] = None,
+        page_size: int = 40,
     ) -> Dict[str, Any]:
         # 分类/副分类及评分/评论排序仅 HTML 客户端支持，否则优先用当前默认客户端
         use_html = (
@@ -539,26 +634,37 @@ class JMProtocolAdapter:
             or bool(sub_category)
             or order_by in (JmMagicConstants.ORDER_BY_SCORE, JmMagicConstants.ORDER_BY_COMMENT)
         )
+        is_html = use_html or (config_manager.get_settings().client_impl == "html")
         client = self.get_html_client() if use_html else self.get_client()
         cat = "0" if category == "ALL" else category
 
-        method_map = {
-            "all": client.search_site,
-            "work": client.search_work,
-            "author": client.search_author,
-            "tag": client.search_tag,
-            "actor": client.search_actor,
+        method_name_map = {
+            "all": "search_site",
+            "work": "search_work",
+            "author": "search_author",
+            "tag": "search_tag",
+            "actor": "search_actor",
         }
-        fn = method_map.get(search_type, client.search_site)
-        res = fn(
-            search_query=query,
-            page=page,
-            order_by=order_by,
-            time=time_range,
-            category=cat,
-            sub_category=sub_category,
+        fn = getattr(client, method_name_map.get(search_type, "search_site"))
+
+        def _fetch(up_page: int) -> Dict[str, Any]:
+            res = fn(
+                search_query=query,
+                page=up_page,
+                order_by=order_by,
+                time=time_range,
+                category=cat,
+                sub_category=sub_category,
+            )
+            return _format_page_albums(res)
+
+        return self._fetch_virtual_paged(
+            ("search", query, search_type, order_by, time_range, cat, sub_category or "", "html" if is_html else "api"),
+            page,
+            page_size,
+            is_html,
+            _fetch,
         )
-        return _format_page_albums(res)
 
     # ---------- 漫画详情 / 章节 / 评论 ----------
 

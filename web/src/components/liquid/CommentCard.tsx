@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowUpRight, Eye, MessageSquareReply, ThumbsUp } from 'lucide-react';
+import React from 'react';
+import { ArrowUpRight, MessageSquareReply, ThumbsUp } from 'lucide-react';
 import type { CommentItem } from '../../api/client';
 import { cleanHtmlText } from '../../utils/text';
 
@@ -20,7 +20,6 @@ export function CommentCard({
   onReply?: (comment: CommentItem) => void;
   onOpenAlbum?: (albumId: string) => void;
 }) {
-  const [revealed, setRevealed] = useState(false);
   const cleanContent = cleanHtmlText(item.content);
   const name = item.username || '匿名读者';
 
@@ -46,6 +45,14 @@ export function CommentCard({
                     {item.level_name}
                   </span>
                 )}
+                {item.spoiler && (
+                  <span
+                    className="px-2 py-0.5 rounded-full text-[10.5px] font-medium"
+                    style={{ backgroundColor: 'rgba(181, 117, 28, 0.14)', color: 'var(--liquid-warning)' }}
+                  >
+                    剧透
+                  </span>
+                )}
               </div>
               <div className="text-[11px]" style={{ color: 'var(--liquid-subtle)' }}>
                 {item.addtime}
@@ -63,24 +70,9 @@ export function CommentCard({
           )}
         </div>
 
-        {item.spoiler && !revealed ? (
-          <button
-            type="button"
-            onClick={() => setRevealed(true)}
-            className="w-full py-2.5 px-3 rounded-[14px] text-[12.5px] font-medium flex items-center justify-center gap-1.5 cursor-pointer"
-            style={{
-              backgroundColor: 'var(--liquid-fill-soft)',
-              color: 'var(--liquid-muted)',
-              border: '1px dashed var(--liquid-separator)',
-            }}
-          >
-            <Eye className="w-3.5 h-3.5" /> 包含剧透内容，点击显示
-          </button>
-        ) : (
-          <p className="text-[14px] whitespace-pre-wrap leading-relaxed break-words">
-            {cleanContent || '（空评论）'}
-          </p>
-        )}
+        <p className="text-[14px] whitespace-pre-wrap leading-relaxed break-words">
+          {cleanContent || '（空评论）'}
+        </p>
 
         {item.replies.length > 0 && (
           <div

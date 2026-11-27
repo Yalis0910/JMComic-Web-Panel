@@ -67,7 +67,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
   String _query = '';
   int _page = 1;
   int _pageCount = 1;
-  int _pageSize = 80;
+  int _pageSize = 40;
 
   List<CategoryOptionItem> _categories = CategoryMetaResult.fallbackCategories;
   Map<String, List<SubCategoryOptionItem>> _subCategoriesMap = CategoryMetaResult.fallbackSubCategories;
@@ -237,7 +237,8 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
     return LiquidSpringControl(
       onTap: onTap,
       child: Container(
-        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 15, vertical: compact ? 6 : 8),
+        alignment: Alignment.center,
+        padding: EdgeInsets.symmetric(horizontal: compact ? 12 : 15),
         decoration: BoxDecoration(
           color: active ? LiquidTokens.scene(context) : LiquidTokens.solid(context),
           borderRadius: BorderRadius.circular(999),
@@ -247,8 +248,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
         ),
         child: Text(
           label,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
           style: TextStyle(
             fontSize: compact ? 12 : 13,
+            height: 1.1,
             fontWeight: FontWeight.w600,
             color: active ? CupertinoColors.white : LiquidTokens.muted(context),
           ),
@@ -676,32 +682,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
               ),
             ),
             SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 10),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CupertinoButton(
-                      onPressed: _page <= 1
-                          ? null
-                          : () {
-                              setState(() => _page--);
-                              _loadActiveTab();
-                            },
-                      child: const Text('上一页'),
-                    ),
-                    Text('第 $_page 页'),
-                    CupertinoButton(
-                      onPressed: _forumItems.length < 10
-                          ? null
-                          : () {
-                              setState(() => _page++);
-                              _loadActiveTab();
-                            },
-                      child: const Text('下一页'),
-                    ),
-                  ],
-                ),
+              child: LiquidPaginationBar(
+                page: _page,
+                hasNext: _forumItems.length >= 10,
+                onPageChange: (nextPage) {
+                  setState(() => _page = nextPage);
+                  _loadActiveTab();
+                },
               ),
             ),
           ] else ...[
@@ -731,32 +718,13 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
             ),
             if ((_query.isNotEmpty || _tab != 'week') && _pageCount > 1)
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 18),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      CupertinoButton(
-                        onPressed: _page <= 1
-                            ? null
-                            : () {
-                                setState(() => _page--);
-                                _loadActiveTab();
-                              },
-                        child: const Text('上一页'),
-                      ),
-                      Text('$_page / $_pageCount'),
-                      CupertinoButton(
-                        onPressed: _page >= _pageCount
-                            ? null
-                            : () {
-                                setState(() => _page++);
-                                _loadActiveTab();
-                              },
-                        child: const Text('下一页'),
-                      ),
-                    ],
-                  ),
+                child: LiquidPaginationBar(
+                  page: _page,
+                  pageCount: _pageCount,
+                  onPageChange: (nextPage) {
+                    setState(() => _page = nextPage);
+                    _loadActiveTab();
+                  },
                 ),
               ),
           ],

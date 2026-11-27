@@ -6,7 +6,7 @@ import { api } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
-import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { PaginationBar, PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 import { extractHotTags, resolveCategories, resolveSubCategories } from '../../utils/categories';
 
 export function SearchPage() {
@@ -341,37 +341,11 @@ export function SearchPage() {
             ))}
           </div>
           {data.page_count > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-3">
-              <button
-                type="button"
-                disabled={initialPage <= 1}
-                onClick={() => updateParams({ page: String(initialPage - 1) })}
-                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                style={{
-                  backgroundColor: 'var(--liquid-solid)',
-                  border: '1px solid var(--liquid-separator)',
-                  boxShadow: 'var(--liquid-shadow-card)',
-                }}
-              >
-                上一页
-              </button>
-              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
-                第 {initialPage} / {data.page_count} 页
-              </span>
-              <button
-                type="button"
-                disabled={initialPage >= data.page_count}
-                onClick={() => updateParams({ page: String(initialPage + 1) })}
-                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                style={{
-                  backgroundColor: 'var(--liquid-solid)',
-                  border: '1px solid var(--liquid-separator)',
-                  boxShadow: 'var(--liquid-shadow-card)',
-                }}
-              >
-                下一页
-              </button>
-            </div>
+            <PaginationBar
+              page={initialPage}
+              pageCount={data.page_count}
+              onPageChange={(nextPage) => updateParams({ page: String(nextPage) })}
+            />
           )}
         </>
       )}

@@ -62,11 +62,12 @@ async def get_ranking(
     ranking_type: str,
     page: int = Query(1, ge=1),
     category: str = Query("0"),
+    page_size: int = Query(40, ge=5, le=80),
 ):
     if ranking_type not in ("day", "week", "month", "all", "likes", "latest"):
         raise HTTPException(status_code=400, detail=f"不支持的排行类型: {ranking_type}")
     try:
-        data = await run_blocking(jm_adapter.get_ranking, ranking_type, page, category)
+        data = await run_blocking(jm_adapter.get_ranking, ranking_type, page, category, page_size)
         return ok(data)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -88,10 +89,11 @@ async def filter_categories(
     order_by: str = Query("mv"),
     category: str = Query("0"),
     sub_category: Optional[str] = Query(default=None),
+    page_size: int = Query(40, ge=5, le=80),
 ):
     try:
         data = await run_blocking(
-            jm_adapter.get_category_filter, page, time, category, order_by, sub_category
+            jm_adapter.get_category_filter, page, time, category, order_by, sub_category, page_size
         )
         return ok(data)
     except Exception as exc:

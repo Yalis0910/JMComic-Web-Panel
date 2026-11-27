@@ -18,10 +18,11 @@ async def search_comics(
     time: str = Query("a"),
     category: str = Query("0"),
     sub_category: Optional[str] = Query(default=None),
+    page_size: int = Query(40, ge=5, le=80),
 ):
     try:
         data = await run_blocking(
-            jm_adapter.search, q, type, page, order_by, time, category, sub_category
+            jm_adapter.search, q, type, page, order_by, time, category, sub_category, page_size
         )
         return ok(data)
     except Exception as exc:

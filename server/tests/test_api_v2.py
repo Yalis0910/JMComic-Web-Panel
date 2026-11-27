@@ -309,3 +309,48 @@ def test_extended_discovery_and_daily_apis(tmp_path: Path, monkeypatch):
         assert len(daily_data["days"]) == 2
         assert daily_data["days"][0]["signed"] is True
         assert daily_data["days"][1]["bonus"] is True
+
+
+def test_virtual_pagination_splits_80_into_40_and_caches(monkeypatch):
+    from app.core.config import config_manager
+    from app.services.jm_adapter import jm_adapter
+
+    settings = config_manager.get_settings()
+    monkeypatch.setattr(settings, "client_impl", "api")
+    jm_adapter._paged_cache.clear()
+
+    upstream_calls = []
+
+    class Fake80Page:
+        def __init__(self, up_page: int):
+            start = (up_page - 1) * 80 + 1
+            self.content = [
+                (str(i), {"name": f"Comic {i}", "author": ["Auth"], "tags": []})
+                for i in range(start, start + 80)
+            ]
+            self.total = 160
+            self.page_count = 2
+            self.page_size = 80
+
+    class FakeApiClient:
+        def search_site(self, search_query, page=1, order_by="mr", time="a", category="0", sub_category=None):
+            upstream_calls.append(page)
+            return Fake80Page(page)
+
+    monkeypatch.setattr(jm_adapter, "get_client", lambda impl=None, prefer_auth=True: FakeApiClient())
+
+    p1 = jm_adapter.search("demo_query", page=1, page_size=40)
+    p2 = jm_adapter.search("demo_query", page=2, page_size=40)
+    p3 = jm_adapter.search("demo_query", page=3, page_size=40)
+
+    assert len(p1["albums"]) == 40
+    assert p1["albums"][0]["album_id"] == "1"
+    assert p1["page_size"] == 40
+    assert p1["page_count"] == 4
+
+    assert len(p2["albums"]) == 40
+    assert p2["albums"][0]["album_id"] == "41"
+
+    assert len(p3["albums"]) == 40
+    assert p3["albums"][0]["album_id"] == "81"
+    assert upstream_calls == [1, 2]

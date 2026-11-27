@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { CommentCard } from '../../components/liquid/CommentCard';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
-import { PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { PillSelect, PaginationBar, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 import { resolveCategories, resolveSubCategories } from '../../utils/categories';
 
 type ExploreTab = 'ranking' | 'filter' | 'week' | 'forum';
@@ -97,7 +97,7 @@ export function ExplorePage() {
           : forumQuery.error;
 
   const albums = tab === 'week' ? weekListQuery.data?.albums || [] : activeData?.albums || [];
-  const pageSize = activeData?.page_size || 20;
+  const pageSize = activeData?.page_size || 40;
 
   const handleSelectCategory = (nextCat: string) => {
     setCategory(nextCat);
@@ -320,42 +320,12 @@ export function ExplorePage() {
               暂无讨论内容
             </div>
           )}
-          <div className="flex items-center justify-center gap-3 pt-3">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-              style={{
-                backgroundColor: 'var(--liquid-solid)',
-                border: '1px solid var(--liquid-separator)',
-                boxShadow: 'var(--liquid-shadow-card)',
-              }}
-            >
-              上一页
-            </button>
-            <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
-              {forumQuery.data?.page_count && forumQuery.data.page_count > 1
-                ? `第 ${page} / ${forumQuery.data.page_count} 页`
-                : `第 ${page} 页`}
-            </span>
-            <button
-              type="button"
-              disabled={
-                (forumQuery.data?.comments.length || 0) === 0 ||
-                (!!forumQuery.data?.page_count && page >= forumQuery.data.page_count)
-              }
-              onClick={() => setPage((p) => p + 1)}
-              className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-              style={{
-                backgroundColor: 'var(--liquid-solid)',
-                border: '1px solid var(--liquid-separator)',
-                boxShadow: 'var(--liquid-shadow-card)',
-              }}
-            >
-              下一页
-            </button>
-          </div>
+          <PaginationBar
+            page={page}
+            pageCount={forumQuery.data?.page_count && forumQuery.data.page_count > 1 ? forumQuery.data.page_count : undefined}
+            hasNext={(forumQuery.data?.comments.length || 0) > 0}
+            onPageChange={setPage}
+          />
         </>
       ) : (
         <>
@@ -370,37 +340,7 @@ export function ExplorePage() {
           </div>
 
           {tab !== 'week' && activeData && activeData.page_count > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-3">
-              <button
-                type="button"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                style={{
-                  backgroundColor: 'var(--liquid-solid)',
-                  border: '1px solid var(--liquid-separator)',
-                  boxShadow: 'var(--liquid-shadow-card)',
-                }}
-              >
-                上一页
-              </button>
-              <span className="text-[13px] font-medium tabular-nums px-3" style={{ color: 'var(--liquid-muted)' }}>
-                第 {page} / {activeData.page_count} 页
-              </span>
-              <button
-                type="button"
-                disabled={page >= activeData.page_count}
-                onClick={() => setPage((p) => p + 1)}
-                className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                style={{
-                  backgroundColor: 'var(--liquid-solid)',
-                  border: '1px solid var(--liquid-separator)',
-                  boxShadow: 'var(--liquid-shadow-card)',
-                }}
-              >
-                下一页
-              </button>
-            </div>
+            <PaginationBar page={page} pageCount={activeData.page_count} onPageChange={setPage} />
           )}
         </>
       )}

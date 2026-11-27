@@ -25,6 +25,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
   bool _favLoading = false;
   String? _favError;
 
+  final Map<String, FavoritePageResult> _favCache = {};
+  int _favRequestSeq = 0;
+
   List<({String photoId, int pageCount})> _offlineChapters = const [];
   bool _offlineLoading = false;
 
@@ -37,9 +40,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
     });
   }
 
-  Future<void> _loadFavorites() async {
-    final acc = ref.read(hybridControllerProvider).account;
-    if (!acc.isLoggedIn) return;
+  String _favCacheKey(ActiveMode mode) => '${mode.name}|$_folderId|$_orderBy|$_page';
+
+  Future<void> _loadFavorites({bool forceRefresh = false}) async {
+    final hybrid = ref.read(hybridControllerProvider);
+    if (!hybrid.account.isLoggedIn) return;
+    final key = _favCacheKey(hybrid.activeMode);
+    if (!forceRefresh && _favCache.containsKey(key)) {
+      final cached = _favCache[key]!;
+      setState(() {
+        _favResult = cached;
+        if (cached.folders.isNotEmpty || _folderId == '0') {
+          _folders = cached.folders;
+        }
+        _favLoading = false;
+        _favError = null;
+      });
+      return;
+    }
+
+    final reqId = ++_favRequestSeq;
     setState(() {
       _favLoading = true;
       _favError = null;
@@ -49,7 +69,8 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           .read(hybridControllerProvider.notifier)
           .activeSource
           .getFavorites(page: _page, folderId: _folderId, orderBy: _orderBy);
-      if (mounted) {
+      if (mounted && reqId == _favRequestSeq) {
+        _favCache[key] = res;
         setState(() {
           _favResult = res;
           if (res.folders.isNotEmpty || _folderId == '0') {
@@ -58,9 +79,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _favError = '$e');
+      if (mounted && reqId == _favRequestSeq) {
+        setState(() => _favError = '$e');
+      }
     } finally {
-      if (mounted) setState(() => _favLoading = false);
+      if (mounted && reqId == _favRequestSeq) {
+        setState(() => _favLoading = false);
+      }
     }
   }
 
@@ -82,13 +107,15 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
       final modeChanged = prev != null && prev.activeMode != next.activeMode;
 
       if (!wasLoggedIn && isLoggedIn) {
+        _favCache.clear();
         setState(() {
           _folderId = '0';
           _page = 1;
           _favError = null;
         });
-        _loadFavorites();
+        _loadFavorites(forceRefresh: true);
       } else if (wasLoggedIn && !isLoggedIn) {
+        _favCache.clear();
         setState(() {
           _favResult = null;
           _folders = const [];
@@ -97,11 +124,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           _favError = null;
         });
       } else if (modeChanged && isLoggedIn) {
+        _favCache.clear();
         setState(() {
           _folderId = '0';
           _page = 1;
         });
-        _loadFavorites();
+        _loadFavorites(forceRefresh: true);
       }
     });
 
@@ -118,7 +146,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
             border: Border(bottom: BorderSide(color: LiquidTokens.separator(context), width: 0.5)),
           ),
           CupertinoSliverRefreshControl(
-            onRefresh: _tab == 'fav' ? _loadFavorites : _loadOffline,
+            onRefresh: _tab == 'fav' ? () => _loadFavorites(forceRefresh: true) : _loadOffline,
           ),
           SliverToBoxAdapter(
             child: Padding(
@@ -132,7 +160,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                 ],
                 onChanged: (v) {
                   setState(() => _tab = v);
-                  if (v == 'fav') _loadFavorites();
+                  if (v == 'fav' && _favResult == null) _loadFavorites();
                   if (v == 'offline') _loadOffline();
                 },
               ),
@@ -194,28 +222,6 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
                   ],
                 ),
               ),
-            ),
-          ),
-        ),
-      ];
-    }
-
-    if (_favLoading) {
-      return const [SkeletonGridSliver(count: 6)];
-    }
-
-    if (_favError != null) {
-      return [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text('加载收藏失败：$_favError'),
-                const SizedBox(height: 12),
-                CupertinoButton.filled(onPressed: _loadFavorites, child: const Text('重试')),
-              ],
             ),
           ),
         ),
@@ -284,7 +290,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
         ),
       ),
-      if (albums.isEmpty)
+      if (_favLoading)
+        const SkeletonGridSliver(count: 6)
+      else if (_favError != null)
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('加载收藏失败：$_favError'),
+                const SizedBox(height: 12),
+                CupertinoButton.filled(
+                  onPressed: () => _loadFavorites(forceRefresh: true),
+                  child: const Text('重试'),
+                ),
+              ],
+            ),
+          ),
+        )
+      else if (albums.isEmpty)
         const SliverFillRemaining(
           hasScrollBody: false,
           child: Center(child: Text('收藏夹暂无漫画')),
@@ -315,32 +340,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
         ),
         if ((_favResult?.pageCount ?? 1) > 1)
           SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 18),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  CupertinoButton(
-                    onPressed: _page <= 1
-                        ? null
-                        : () {
-                            setState(() => _page--);
-                            _loadFavorites();
-                          },
-                    child: const Text('上一页'),
-                  ),
-                  Text('$_page / ${_favResult!.pageCount}'),
-                  CupertinoButton(
-                    onPressed: _page >= _favResult!.pageCount
-                        ? null
-                        : () {
-                            setState(() => _page++);
-                            _loadFavorites();
-                          },
-                    child: const Text('下一页'),
-                  ),
-                ],
-              ),
+            child: LiquidPaginationBar(
+              page: _page,
+              pageCount: _favResult!.pageCount,
+              onPageChange: (nextPage) {
+                setState(() => _page = nextPage);
+                _loadFavorites();
+              },
             ),
           ),
       ],
@@ -509,7 +515,9 @@ class _FolderPill extends StatelessWidget {
     return LiquidSpringControl(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        height: 36,
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: active ? LiquidTokens.scene(context) : LiquidTokens.solid(context),
           borderRadius: BorderRadius.circular(999),
@@ -519,8 +527,13 @@ class _FolderPill extends StatelessWidget {
         ),
         child: Text(
           label,
+          textHeightBehavior: const TextHeightBehavior(
+            applyHeightToFirstAscent: false,
+            applyHeightToLastDescent: false,
+          ),
           style: TextStyle(
             fontSize: 12.5,
+            height: 1.1,
             fontWeight: FontWeight.w600,
             color: active ? CupertinoColors.white : LiquidTokens.muted(context),
           ),

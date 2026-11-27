@@ -41,20 +41,111 @@ jobs:
       - name: Read app version from pubspec.yaml
         id: ver
         working-directory: mobile
+        env:
+          GH_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          VERSION=$(python3 -c '
-          import re
+          python3 -c '
+          import os, re
           from pathlib import Path
           text = Path("pubspec.yaml").read_text(encoding="utf-8")
-          m = re.search(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)", text, re.M)
-          print(m.group(1) if m else "2.0.0")
-          ')
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          m = re.search(r"^version:\s*([0-9]+\.[0-9]+\.[0-9]+)(?:\+([0-9]+))?", text, re.M)
+          version = m.group(1) if m else "2.0.0"
+          pub_build = int(m.group(2)) if (m and m.group(2)) else 1
+          run_num = int(os.environ.get("GH_RUN_NUMBER") or "1")
+          build_num = max(pub_build, run_num)
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+              fh.write(f"version={version}\n")
+              fh.write(f"build_number={build_num}\n")
+          '
       - name: Bootstrap Android runner
         working-directory: mobile
         run: |
           flutter create . --platforms=android --project-name jmlis --org com.jmlis.app
           rm -f test/widget_test.dart
+      - name: Configure persistent release keystore (if secrets provided)
+        working-directory: mobile
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          python3 -c '
+          import base64, os
+          from pathlib import Path
+
+          b64 = os.environ.get("KEYSTORE_B64", "").strip()
+          if not b64:
+              print("ANDROID_KEYSTORE_BASE64 not set; falling back to default debug signing.")
+              raise SystemExit(0)
+
+          ks_pass = os.environ.get("KEYSTORE_PASS", "")
+          alias = os.environ.get("KEY_ALIAS", "")
+          key_pass = os.environ.get("KEY_PASS", "") or ks_pass
+          if not ks_pass or not alias:
+              raise SystemExit("ANDROID_KEYSTORE_PASSWORD and ANDROID_KEY_ALIAS are required when ANDROID_KEYSTORE_BASE64 is set.")
+
+          Path("android/app/release.jks").write_bytes(base64.b64decode(b64))
+          Path("android/key.properties").write_text(
+              f"storePassword={ks_pass}\nkeyPassword={key_pass}\nkeyAlias={alias}\nstoreFile=release.jks\n",
+              encoding="utf-8",
+          )
+
+          kts = Path("android/app/build.gradle.kts")
+          groovy = Path("android/app/build.gradle")
+          if kts.exists():
+              txt = kts.read_text(encoding="utf-8")
+              header = (
+                  "import java.util.Properties\n"
+                  "import java.io.FileInputStream\n\n"
+                  "val keystoreProperties = Properties()\n"
+                  "val keystorePropertiesFile = rootProject.file(\"key.properties\")\n"
+                  "if (keystorePropertiesFile.exists()) {\n"
+                  "    keystoreProperties.load(FileInputStream(keystorePropertiesFile))\n"
+                  "}\n\n"
+              )
+              txt = header + txt
+              signing_block = (
+                  "    signingConfigs {\n"
+                  "        create(\"release\") {\n"
+                  "            keyAlias = keystoreProperties.getProperty(\"keyAlias\")\n"
+                  "            keyPassword = keystoreProperties.getProperty(\"keyPassword\")\n"
+                  "            storeFile = keystoreProperties.getProperty(\"storeFile\")?.let { file(it) }\n"
+                  "            storePassword = keystoreProperties.getProperty(\"storePassword\")\n"
+                  "        }\n"
+                  "    }\n"
+                  "    buildTypes {"
+              )
+              txt = txt.replace("    buildTypes {", signing_block, 1)
+              txt = txt.replace("signingConfigs.getByName(\"debug\")", "signingConfigs.getByName(\"release\")")
+              kts.write_text(txt, encoding="utf-8")
+          elif groovy.exists():
+              txt = groovy.read_text(encoding="utf-8")
+              header = (
+                  "def keystoreProperties = new Properties()\n"
+                  "def keystorePropertiesFile = rootProject.file(\"key.properties\")\n"
+                  "if (keystorePropertiesFile.exists()) {\n"
+                  "    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))\n"
+                  "}\n\n"
+              )
+              txt = header + txt
+              signing_block = (
+                  "    signingConfigs {\n"
+                  "        release {\n"
+                  "            keyAlias keystoreProperties[\"keyAlias\"]\n"
+                  "            keyPassword keystoreProperties[\"keyPassword\"]\n"
+                  "            storeFile keystoreProperties[\"storeFile\"] ? file(keystoreProperties[\"storeFile\"]) : null\n"
+                  "            storePassword keystoreProperties[\"storePassword\"]\n"
+                  "        }\n"
+                  "    }\n"
+                  "    buildTypes {"
+              )
+              txt = txt.replace("    buildTypes {", signing_block, 1)
+              txt = txt.replace("signingConfig signingConfigs.debug", "signingConfig signingConfigs.release")
+              txt = txt.replace("signingConfig = signingConfigs.debug", "signingConfig = signingConfigs.release")
+              groovy.write_text(txt, encoding="utf-8")
+          print("Configured persistent release signing successfully.")
+          '
       - name: Configure AndroidManifest label & network permissions
         working-directory: mobile
         run: |
@@ -85,7 +176,7 @@ jobs:
       - name: Build Android Release APK
         working-directory: mobile
         run: |
-          flutter build apk --release
+          flutter build apk --release --build-number="${{ steps.ver.outputs.build_number }}"
           cp build/app/outputs/flutter-apk/app-release.apk "build/app/outputs/flutter-apk/JMlis-v${{ steps.ver.outputs.version }}.apk"
       - name: Upload Android APK
         uses: actions/upload-artifact@v4

@@ -396,12 +396,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         ),
                         Container(height: 0.7, color: LiquidTokens.separator(context)),
                         CupertinoListTile(
+                          title: const Text('阅读器预加载页数'),
+                          subtitle: const Text('提前下载并解密后续页面，减少翻页等待'),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CupertinoButton(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                onPressed: state.settings.preloadCount <= 1
+                                    ? null
+                                    : () => ctrl.updateSettings(
+                                          state.settings.copyWith(preloadCount: state.settings.preloadCount - 1),
+                                        ),
+                                child: const Icon(CupertinoIcons.minus_circle, size: 22),
+                              ),
+                              SizedBox(
+                                width: 28,
+                                child: Text(
+                                  '${state.settings.preloadCount}',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                              CupertinoButton(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                onPressed: state.settings.preloadCount >= 20
+                                    ? null
+                                    : () => ctrl.updateSettings(
+                                          state.settings.copyWith(preloadCount: state.settings.preloadCount + 1),
+                                        ),
+                                child: const Icon(CupertinoIcons.plus_circle, size: 22),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        CupertinoListTile(
                           leading: ClipRRect(
                             borderRadius: BorderRadius.circular(10),
                             child: Image.asset('assets/icon/app_icon.png', width: 28, height: 28),
                           ),
                           title: const Text('JMlis'),
-                          subtitle: const Text('v2.0.1 · Liquid Glass 跨平台漫画阅读器'),
+                          subtitle: const Text('v2.0.2 · Liquid Glass 跨平台漫画阅读器'),
                         ),
                       ],
                     ),

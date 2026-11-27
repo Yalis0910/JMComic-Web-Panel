@@ -2,9 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
+  ArrowUpDown,
   ChevronLeft,
   ChevronRight,
   Layers,
+  List,
   Maximize2,
   Minimize2,
   RotateCw,
@@ -109,8 +111,11 @@ export function ReaderPage() {
   const [hudVisible, setHudVisible] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [thumbsOpen, setThumbsOpen] = useState(false);
+  const [chaptersOpen, setChaptersOpen] = useState(false);
+  const [epReverse, setEpReverse] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const stageRef = useRef<HTMLDivElement>(null);
   const verticalRefs = useRef<Record<number, HTMLDivElement | null>>({});
 
   const onlineAlbumQuery = useQuery({
@@ -220,9 +225,23 @@ export function ReaderPage() {
   const switchChapter = useCallback(
     (targetId: string) => {
       setCurrentIndex(0);
+      if (stageRef.current) {
+        stageRef.current.scrollTop = 0;
+      }
       navigate(`/read/${source}/${albumId}/${targetId}`, { replace: true });
     },
     [albumId, navigate, source]
+  );
+
+  useEffect(() => {
+    if (stageRef.current) {
+      stageRef.current.scrollTop = 0;
+    }
+  }, [photoId]);
+
+  const orderedChapters = useMemo(
+    () => (epReverse ? [...chapters].reverse() : chapters),
+    [chapters, epReverse]
   );
 
   useEffect(() => {
@@ -290,18 +309,30 @@ export function ReaderPage() {
 
               <div className="min-w-0 text-center flex-1 px-2">
                 <div className="text-[13.5px] font-semibold truncate">{title}</div>
-                <div className="text-[11px] text-white/65 tabular-nums">
+                <div className="text-[11px] text-white/65 tabular-nums truncate">
+                  {chapters[epIndex]?.name ? `${chapters[epIndex].name} · ` : ''}
                   {pages.length ? `${currentIndex + 1} / ${pages.length}` : '加载中'}
                 </div>
               </div>
 
               <div className="flex items-center gap-1.5 shrink-0">
+                {chapters.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setChaptersOpen(true)}
+                    className="min-h-[36px] px-3 rounded-full bg-white/12 flex items-center gap-1.5 text-[12.5px] font-medium cursor-pointer liquid-tactile liquid-focus-ring"
+                    title="章节目录"
+                  >
+                    <List className="w-4 h-4" />
+                    <span className="hidden sm:inline">目录</span>
+                  </button>
+                )}
                 {showThumbStrip && (
                   <button
                     type="button"
                     onClick={() => setThumbsOpen(true)}
                     className="w-9 h-9 rounded-full bg-white/12 flex items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
-                    title="目录与缩略图"
+                    title="缩略图与目录"
                   >
                     <Layers className="w-4 h-4" />
                   </button>
@@ -330,6 +361,7 @@ export function ReaderPage() {
 
       {/* 阅读主舞台 */}
       <div
+        ref={stageRef}
         onClick={handleStageClick}
         className="flex-1 overflow-y-auto overflow-x-hidden select-none"
       >
@@ -568,6 +600,58 @@ export function ReaderPage() {
               </button>
             ))}
           </div>
+        </div>
+      </BottomSheet>
+
+      {/* 章节目录跳转 Sheet */}
+      <BottomSheet open={chaptersOpen} onClose={() => setChaptersOpen(false)} title={`章节目录 (${chapters.length})`}>
+        <div className="space-y-3.5">
+          {chapters.length > 1 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px]" style={{ color: 'var(--liquid-muted)' }}>
+                点击章节直接跳转阅读
+              </span>
+              <button
+                type="button"
+                onClick={() => setEpReverse((r) => !r)}
+                className="min-h-[34px] inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-medium cursor-pointer liquid-tactile"
+                style={{
+                  backgroundColor: 'var(--liquid-solid)',
+                  border: '1px solid var(--liquid-separator)',
+                }}
+              >
+                <ArrowUpDown className="w-3.5 h-3.5" /> {epReverse ? '倒序' : '正序'}
+              </button>
+            </div>
+          )}
+          <InsetGroup>
+            {orderedChapters.map((c, idx) => {
+              const active = c.id === photoId;
+              return (
+                <InsetRow
+                  key={c.id}
+                  label={c.name}
+                  isLast={idx === orderedChapters.length - 1}
+                  onClick={() => {
+                    setChaptersOpen(false);
+                    if (!active) switchChapter(c.id);
+                  }}
+                  right={
+                    active ? (
+                      <span
+                        className="px-2.5 py-0.5 rounded-full text-[11.5px] font-semibold"
+                        style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+                      >
+                        当前
+                      </span>
+                    ) : (
+                      <ChevronRight className="w-4 h-4 opacity-45" />
+                    )
+                  }
+                />
+              );
+            })}
+          </InsetGroup>
         </div>
       </BottomSheet>
     </div>

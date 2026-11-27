@@ -17,6 +17,7 @@ class HybridSettings {
   final ConnectionPreference preference;
   final bool darkMode;
   final bool showCovers;
+  final int preloadCount;
 
   const HybridSettings({
     this.serverUrl = 'http://192.168.1.10:8800',
@@ -24,6 +25,7 @@ class HybridSettings {
     this.preference = ConnectionPreference.auto,
     this.darkMode = false,
     this.showCovers = true,
+    this.preloadCount = 6,
   });
 
   HybridSettings copyWith({
@@ -32,6 +34,7 @@ class HybridSettings {
     ConnectionPreference? preference,
     bool? darkMode,
     bool? showCovers,
+    int? preloadCount,
   }) =>
       HybridSettings(
         serverUrl: serverUrl ?? this.serverUrl,
@@ -39,6 +42,7 @@ class HybridSettings {
         preference: preference ?? this.preference,
         darkMode: darkMode ?? this.darkMode,
         showCovers: showCovers ?? this.showCovers,
+        preloadCount: (preloadCount ?? this.preloadCount).clamp(1, 20),
       );
 }
 
@@ -84,9 +88,11 @@ class HybridController extends StateNotifier<HybridState> {
   static const _kPref = 'hybrid_pref';
   static const _kDark = 'hybrid_dark';
   static const _kShowCovers = 'hybrid_show_covers';
+  static const _kPreloadCount = 'hybrid_preload_count';
   static const _kHistory = 'hybrid_history';
 
   final DirectJmSource _directSource = DirectJmSource();
+  LanServerSource? _lanSource;
 
   Future<void> _init() async {
     final prefs = await SharedPreferences.getInstance();
@@ -97,6 +103,7 @@ class HybridController extends StateNotifier<HybridState> {
       preference: ConnectionPreference.values[prefIdx.clamp(0, 2)],
       darkMode: prefs.getBool(_kDark) ?? false,
       showCovers: prefs.getBool(_kShowCovers) ?? true,
+      preloadCount: (prefs.getInt(_kPreloadCount) ?? 6).clamp(1, 20),
     );
     final rawHist = prefs.getString(_kHistory);
     final histList = rawHist == null
@@ -108,12 +115,24 @@ class HybridController extends StateNotifier<HybridState> {
     await probeAndSwitch();
   }
 
+  LanServerSource _getLanSource() {
+    final existing = _lanSource;
+    if (existing != null &&
+        existing.baseUrl == state.settings.serverUrl &&
+        existing.panelToken == state.settings.panelToken) {
+      return existing;
+    }
+    final next = LanServerSource(
+      baseUrl: state.settings.serverUrl,
+      panelToken: state.settings.panelToken,
+    );
+    _lanSource = next;
+    return next;
+  }
+
   ComicDataSource get activeSource {
     if (state.activeMode == ActiveMode.lanServer) {
-      return LanServerSource(
-        baseUrl: state.settings.serverUrl,
-        panelToken: state.settings.panelToken,
-      );
+      return _getLanSource();
     }
     return _directSource;
   }
@@ -126,10 +145,12 @@ class HybridController extends StateNotifier<HybridState> {
     await prefs.setInt(_kPref, next.preference.index);
     await prefs.setBool(_kDark, next.darkMode);
     await prefs.setBool(_kShowCovers, next.showCovers);
+    await prefs.setInt(_kPreloadCount, next.preloadCount);
     state = state.copyWith(settings: next);
     if (prev.serverUrl != next.serverUrl ||
         prev.panelToken != next.panelToken ||
         prev.preference != next.preference) {
+      _lanSource = null;
       await probeAndSwitch();
     }
   }

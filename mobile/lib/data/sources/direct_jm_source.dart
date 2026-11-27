@@ -58,6 +58,7 @@ class DirectJmSource implements ComicDataSource {
   bool _domainsInitialized = false;
   bool _sessionLoaded = false;
   final Map<String, String> _cookies = {};
+  final Map<String, ({DateTime fetchedAt, PagedComicsResult result})> _pagedCache = {};
   UserAccountStatus _account = UserAccountStatus.empty;
 
   @override
@@ -300,6 +301,64 @@ class DirectJmSource implements ComicDataSource {
     return PagedComicsResult(albums: albums, total: total, pageCount: pageCount, pageSize: pageSize);
   }
 
+  Future<PagedComicsResult> _fetchVirtualPaged(
+    String cachePrefix,
+    int page,
+    Future<dynamic> Function(int upstreamPage) fetcher,
+  ) async {
+    const targetSize = 40;
+    const upstreamSize = 80;
+    final safePage = max(1, page);
+    final upstreamPage = ((safePage - 1) * targetSize) ~/ upstreamSize + 1;
+    final offset = ((safePage - 1) * targetSize) % upstreamSize;
+    final cacheKey = '$cachePrefix|$upstreamPage';
+
+    PagedComicsResult? cached;
+    final hit = _pagedCache[cacheKey];
+    if (hit != null && DateTime.now().difference(hit.fetchedAt).inSeconds < 60) {
+      cached = hit.result;
+    }
+
+    if (cached == null) {
+      final raw = await fetcher(upstreamPage);
+      if (raw is Map && raw['redirect_aid'] != null) {
+        final detail = await getAlbumDetail('${raw['redirect_aid']}');
+        return PagedComicsResult(
+          albums: [
+            ComicSummary(
+              albumId: detail.albumId,
+              title: detail.title,
+              author: detail.authors.join(', '),
+              tags: detail.tags,
+              coverUrl: detail.coverUrl,
+              coverFallbacks: detail.coverFallbacks,
+            ),
+          ],
+          total: 1,
+          pageCount: 1,
+          pageSize: targetSize,
+        );
+      }
+      cached = _parsePagedApiResult(raw);
+      if (_pagedCache.length >= 40) {
+        _pagedCache.remove(_pagedCache.keys.first);
+      }
+      _pagedCache[cacheKey] = (fetchedAt: DateTime.now(), result: cached);
+    }
+
+    final sliced = offset >= cached.albums.length
+        ? const <ComicSummary>[]
+        : cached.albums.skip(offset).take(targetSize).toList();
+    final effTotal = max(cached.total, (upstreamPage - 1) * upstreamSize + cached.albums.length);
+    final effPages = effTotal > 0 ? max(1, (effTotal / targetSize).ceil()) : 1;
+    return PagedComicsResult(
+      albums: sliced,
+      total: effTotal,
+      pageCount: effPages,
+      pageSize: targetSize,
+    );
+  }
+
   @override
   Future<List<({String title, List<ComicSummary> albums})>> getPromoteSections() async {
     final raw = await _reqApi('/promote', query: {'page': 1});
@@ -409,11 +468,14 @@ class DirectJmSource implements ComicDataSource {
       'latest' => 'mr',
       _ => 'mv_t',
     };
-    final data = await _reqApi(
-      '/categories/filter',
-      query: {'page': page, 'order': '', 'c': category, 'o': o},
+    return _fetchVirtualPaged(
+      'rank|$type|$category',
+      page,
+      (upPage) => _reqApi(
+        '/categories/filter',
+        query: {'page': upPage, 'order': '', 'c': category, 'o': o},
+      ),
     );
-    return _parsePagedApiResult(data);
   }
 
   @override
@@ -426,11 +488,14 @@ class DirectJmSource implements ComicDataSource {
   }) async {
     final safeOrder = (orderBy == 'tr' || orderBy == 'md') ? 'mv' : orderBy;
     final o = time == 'a' ? safeOrder : '${safeOrder}_$time';
-    final data = await _reqApi(
-      '/categories/filter',
-      query: {'page': page, 'order': '', 'c': category, 'o': o},
+    return _fetchVirtualPaged(
+      'filter|$time|$safeOrder|$category',
+      page,
+      (upPage) => _reqApi(
+        '/categories/filter',
+        query: {'page': upPage, 'order': '', 'c': category, 'o': o},
+      ),
     );
-    return _parsePagedApiResult(data);
   }
 
   @override
@@ -451,29 +516,14 @@ class DirectJmSource implements ComicDataSource {
       _ => 0,
     };
     final safeOrder = (orderBy == 'tr' || orderBy == 'md') ? 'mr' : orderBy;
-    final data = await _reqApi(
-      '/search',
-      query: {'main_tag': mainTag, 'search_query': query, 'page': page, 'o': safeOrder, 't': time},
+    return _fetchVirtualPaged(
+      'search|$query|$mainTag|$safeOrder|$time',
+      page,
+      (upPage) => _reqApi(
+        '/search',
+        query: {'main_tag': mainTag, 'search_query': query, 'page': upPage, 'o': safeOrder, 't': time},
+      ),
     );
-    final redirectAid = data['redirect_aid'];
-    if (redirectAid != null) {
-      final detail = await getAlbumDetail('$redirectAid');
-      return PagedComicsResult(
-        albums: [
-          ComicSummary(
-            albumId: detail.albumId,
-            title: detail.title,
-            author: detail.authors.join(', '),
-            tags: detail.tags,
-            coverUrl: detail.coverUrl,
-            coverFallbacks: detail.coverFallbacks,
-          ),
-        ],
-        total: 1,
-        pageCount: 1,
-      );
-    }
-    return _parsePagedApiResult(data);
   }
 
   @override
@@ -526,20 +576,24 @@ class DirectJmSource implements ComicDataSource {
 
   @override
   Future<List<ChapterImageItem>> getChapterImages(String photoId) async {
-    final d = Map<String, dynamic>.from(await _reqApi('/chapter', query: {'id': photoId}));
-    final scrambleHtml = await _reqApi(
-      '/chapter_view_template',
-      query: {
-        'id': photoId,
-        'mode': 'vertical',
-        'page': '0',
-        'app_img_shunt': '1',
-        'express': 'off',
-        'v': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      },
-      secret: JmCrypto.appTokenSecret2,
-      decodeData: false,
-    );
+    final results = await Future.wait([
+      _reqApi('/chapter', query: {'id': photoId}),
+      _reqApi(
+        '/chapter_view_template',
+        query: {
+          'id': photoId,
+          'mode': 'vertical',
+          'page': '0',
+          'app_img_shunt': '1',
+          'express': 'off',
+          'v': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+        },
+        secret: JmCrypto.appTokenSecret2,
+        decodeData: false,
+      ),
+    ]);
+    final d = Map<String, dynamic>.from(results[0] as Map);
+    final scrambleHtml = results[1];
     final match = RegExp(r'var scramble_id = (\d+);').firstMatch('$scrambleHtml');
     final scrambleId = int.tryParse(match?.group(1) ?? '') ?? 220980;
     final imgHost = _imageDomains[Random().nextInt(min(3, _imageDomains.length))];
@@ -564,19 +618,38 @@ class DirectJmSource implements ComicDataSource {
 
   @override
   Future<Uint8List> fetchChapterImageBytes(ChapterImageItem item) async {
-    final resp = await _dio.get<List<int>>(
-      item.url,
-      options: Options(
-        responseType: ResponseType.bytes,
-        headers: {
-          'X-Requested-With': 'com.JMComic3.app',
-          'Referer': 'https://${_apiDomains.first}',
-        },
-      ),
-    );
-    final raw = Uint8List.fromList(resp.data ?? const []);
-    final num = JmImageDecoder.getNumByUrl(item.scrambleId, item.url);
-    return JmImageDecoder.decodeStrips(raw, num);
+    final uri = Uri.tryParse(item.url);
+    final candidateUrls = <String>[item.url];
+    if (uri != null && uri.path.isNotEmpty) {
+      for (final domain in _imageDomains) {
+        if (domain != uri.host) {
+          candidateUrls.add(uri.replace(host: domain).toString());
+        }
+      }
+    }
+
+    Object? lastErr;
+    for (final targetUrl in candidateUrls) {
+      try {
+        final resp = await _dio.get<List<int>>(
+          targetUrl,
+          options: Options(
+            responseType: ResponseType.bytes,
+            headers: {
+              'X-Requested-With': 'com.JMComic3.app',
+              'Referer': 'https://${_apiDomains.first}',
+            },
+          ),
+        );
+        final raw = Uint8List.fromList(resp.data ?? const []);
+        if (raw.isEmpty) continue;
+        final num = JmImageDecoder.getNumByUrl(item.scrambleId, targetUrl);
+        return JmImageDecoder.decodeStrips(raw, num);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    throw Exception('图片加载失败: $lastErr');
   }
 
   // ---------- 账号认证 / 收藏 / 每日签到（直连 APP 端协议） ----------

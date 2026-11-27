@@ -7,7 +7,7 @@ import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
 import { LiquidGlass } from '../../components/liquid/LiquidGlass';
-import { BottomSheet, InsetGroup, PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
+import { BottomSheet, InsetGroup, PaginationBar, PillSelect, SegmentedControl, SkeletonCardGrid } from '../../components/liquid/LiquidControls';
 
 export function FavoritesPage() {
   const [params, setParams] = useSearchParams();
@@ -281,29 +281,7 @@ export function FavoritesPage() {
                 ))}
               </div>
               {favData && favData.page_count > 1 && (
-                <div className="flex items-center justify-center gap-3 pt-3">
-                  <button
-                    type="button"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => p - 1)}
-                    className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                    style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
-                  >
-                    上一页
-                  </button>
-                  <span className="text-[13px] font-medium tabular-nums">
-                    第 {page} / {favData.page_count} 页
-                  </span>
-                  <button
-                    type="button"
-                    disabled={page >= favData.page_count}
-                    onClick={() => setPage((p) => p + 1)}
-                    className="min-h-[42px] px-5 py-2 rounded-full text-[13.5px] font-semibold disabled:opacity-40 cursor-pointer liquid-tactile"
-                    style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
-                  >
-                    下一页
-                  </button>
-                </div>
+                <PaginationBar page={page} pageCount={favData.page_count} onPageChange={setPage} />
               )}
             </>
           )}

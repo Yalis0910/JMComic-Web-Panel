@@ -14,6 +14,7 @@ Future<void> openReaderScreen(
   required String photoId,
   required String title,
   int initialPage = 0,
+  List<ComicEpisode> episodes = const [],
 }) {
   return Navigator.of(context, rootNavigator: true).push(
     CupertinoPageRoute(
@@ -22,6 +23,7 @@ Future<void> openReaderScreen(
         photoId: photoId,
         title: title,
         initialPage: initialPage,
+        initialEpisodes: episodes,
       ),
     ),
   );
@@ -385,7 +387,7 @@ class SkeletonGridSliver extends StatelessWidget {
   }
 }
 
-class CommentCardTile extends StatefulWidget {
+class CommentCardTile extends StatelessWidget {
   final CommentItemModel comment;
   final VoidCallback? onReply;
   final VoidCallback? onOpenAlbum;
@@ -395,13 +397,6 @@ class CommentCardTile extends StatefulWidget {
     this.onReply,
     this.onOpenAlbum,
   });
-
-  @override
-  State<CommentCardTile> createState() => _CommentCardTileState();
-}
-
-class _CommentCardTileState extends State<CommentCardTile> {
-  bool _revealed = false;
 
   static const _avatarPalette = [
     Color(0xFF25414A),
@@ -413,7 +408,7 @@ class _CommentCardTileState extends State<CommentCardTile> {
 
   @override
   Widget build(BuildContext context) {
-    final c = widget.comment;
+    final c = comment;
     final name = c.username.isEmpty ? '匿名读者' : c.username;
     final avatarColor = _avatarPalette[name.hashCode.abs() % _avatarPalette.length];
 
@@ -470,6 +465,24 @@ class _CommentCardTileState extends State<CommentCardTile> {
                               ),
                             ),
                           ],
+                          if (c.spoiler) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFB5751C).withValues(alpha: 0.14),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: const Text(
+                                '剧透',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFFB5751C),
+                                ),
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                       if (c.addtime.isNotEmpty)
@@ -499,31 +512,10 @@ class _CommentCardTileState extends State<CommentCardTile> {
               ],
             ),
             const SizedBox(height: 10),
-            if (c.spoiler && !_revealed)
-              GestureDetector(
-                onTap: () => setState(() => _revealed = true),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-                  decoration: BoxDecoration(
-                    color: LiquidTokens.elevated(context),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(CupertinoIcons.eye_slash, size: 14, color: LiquidTokens.muted(context)),
-                      const SizedBox(width: 6),
-                      Text('包含剧透，点击查看内容', style: TextStyle(fontSize: 12.5, color: LiquidTokens.muted(context))),
-                    ],
-                  ),
-                ),
-              )
-            else
-              Text(
-                c.content.isEmpty ? '（空评论）' : c.content,
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
+            Text(
+              c.content.isEmpty ? '（空评论）' : c.content,
+              style: const TextStyle(fontSize: 14, height: 1.5),
+            ),
             if (c.replies.isNotEmpty) ...[
               const SizedBox(height: 10),
               Container(
@@ -557,14 +549,14 @@ class _CommentCardTileState extends State<CommentCardTile> {
                 ),
               ),
             ],
-            if (widget.onReply != null || (widget.onOpenAlbum != null && c.albumId.isNotEmpty)) ...[
+            if (onReply != null || (onOpenAlbum != null && c.albumId.isNotEmpty)) ...[
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  if (widget.onOpenAlbum != null && c.albumId.isNotEmpty)
+                  if (onOpenAlbum != null && c.albumId.isNotEmpty)
                     GestureDetector(
-                      onTap: widget.onOpenAlbum,
+                      onTap: onOpenAlbum,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                         decoration: BoxDecoration(
@@ -581,11 +573,11 @@ class _CommentCardTileState extends State<CommentCardTile> {
                         ),
                       ),
                     ),
-                  if (widget.onOpenAlbum != null && c.albumId.isNotEmpty && widget.onReply != null)
+                  if (onOpenAlbum != null && c.albumId.isNotEmpty && onReply != null)
                     const SizedBox(width: 8),
-                  if (widget.onReply != null)
+                  if (onReply != null)
                     GestureDetector(
-                      onTap: widget.onReply,
+                      onTap: onReply,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                         decoration: BoxDecoration(
@@ -776,6 +768,148 @@ class _AccountLoginSheetState extends State<_AccountLoginSheet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class LiquidPaginationBar extends StatefulWidget {
+  final int page;
+  final int? pageCount;
+  final bool hasNext;
+  final ValueChanged<int> onPageChange;
+
+  const LiquidPaginationBar({
+    super.key,
+    required this.page,
+    this.pageCount,
+    this.hasNext = true,
+    required this.onPageChange,
+  });
+
+  @override
+  State<LiquidPaginationBar> createState() => _LiquidPaginationBarState();
+}
+
+class _LiquidPaginationBarState extends State<LiquidPaginationBar> {
+  late final TextEditingController _jumpCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _jumpCtrl = TextEditingController(text: '${widget.page}');
+  }
+
+  @override
+  void didUpdateWidget(covariant LiquidPaginationBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.page != widget.page) {
+      _jumpCtrl.text = '${widget.page}';
+    }
+  }
+
+  @override
+  void dispose() {
+    _jumpCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submitJump() {
+    final parsed = int.tryParse(_jumpCtrl.text.trim());
+    if (parsed == null || parsed < 1) {
+      _jumpCtrl.text = '${widget.page}';
+      return;
+    }
+    final maxPage = widget.pageCount;
+    final target = (maxPage != null && maxPage > 0) ? parsed.clamp(1, maxPage) : parsed;
+    _jumpCtrl.text = '$target';
+    FocusScope.of(context).unfocus();
+    if (target != widget.page) {
+      widget.onPageChange(target);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxPage = widget.pageCount;
+    final canPrev = widget.page > 1;
+    final canNext = (maxPage != null && maxPage > 0) ? widget.page < maxPage : widget.hasNext;
+    final pageText = (maxPage != null && maxPage > 0) ? '${widget.page} / $maxPage' : '第 ${widget.page} 页';
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                onPressed: canPrev ? () => widget.onPageChange(widget.page - 1) : null,
+                child: const Text('上一页'),
+              ),
+              Text(
+                pageText,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: LiquidTokens.ink(context),
+                ),
+              ),
+              CupertinoButton(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                onPressed: canNext ? () => widget.onPageChange(widget.page + 1) : null,
+                child: const Text('下一页'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              SizedBox(
+                width: 68,
+                height: 34,
+                child: CupertinoTextField(
+                  controller: _jumpCtrl,
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.go,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 13, color: LiquidTokens.ink(context)),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.solid(context),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: LiquidTokens.separator(context)),
+                  ),
+                  onSubmitted: (_) => _submitJump(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              LiquidSpringControl(
+                onTap: _submitJump,
+                child: Container(
+                  height: 34,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.accentSoft(context),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    '跳转',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: LiquidTokens.accentStrong(context),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

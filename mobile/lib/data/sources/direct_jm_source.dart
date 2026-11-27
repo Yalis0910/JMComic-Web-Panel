@@ -644,7 +644,7 @@ class DirectJmSource implements ComicDataSource {
         final raw = Uint8List.fromList(resp.data ?? const []);
         if (raw.isEmpty) continue;
         final num = JmImageDecoder.getNumByUrl(item.scrambleId, targetUrl);
-        return JmImageDecoder.decodeStrips(raw, num);
+        return await JmImageDecoder.decodeStrips(raw, num);
       } catch (e) {
         lastErr = e;
       }

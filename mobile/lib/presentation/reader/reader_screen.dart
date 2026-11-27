@@ -490,20 +490,20 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                         physics: const BouncingScrollPhysics(),
                         itemCount: _images.length + (nextEp != null ? 1 : 0),
                         itemBuilder: (ctx, idx) {
-                          if (idx >= _images.length) {
+                          if (idx >= _images.length && nextEp != null) {
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(24, 24, 24, 120),
                               child: LiquidSpringControl(
-                                onTap: () => _switchChapter(nextEp!),
+                                onTap: () => _switchChapter(nextEp),
                                 child: Container(
                                   height: 50,
                                   alignment: Alignment.center,
                                   decoration: BoxDecoration(
-                                    color: LiquidTokens.lightMist,
+                                    color: LiquidTokens.lightSaltMist,
                                     borderRadius: BorderRadius.circular(999),
                                   ),
                                   child: Text(
-                                    '继续阅读下一话：第 ${nextEp!.index} 话 ${nextEp.name}'.trim(),
+                                    '继续阅读下一话：第 ${nextEp.index} 话 ${nextEp.name}'.trim(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(

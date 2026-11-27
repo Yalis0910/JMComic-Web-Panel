@@ -6,10 +6,17 @@ enum ConnectionPreference { auto, lanOnly, directOnly }
 
 enum ActiveMode { lanServer, directJm }
 
+enum MobileReaderMode { vertical, singleLtr, singleRtl, doublePage }
+
+enum AppThemeMode { system, light, dark }
+
+enum CoverPrivacyMode { show, blur, hide }
+
 abstract class ComicDataSource {
   ActiveMode get mode;
   bool get supportsPostingComments;
   bool get supportsWebOnlyFilters;
+  bool get supportsServerDownload;
 
   Future<List<({String title, List<ComicSummary> albums})>> getPromoteSections();
   Future<List<ComicSummary>> getLatest({int page = 1});
@@ -48,4 +55,5 @@ abstract class ComicDataSource {
   Future<DailyCheckinInfo> getDailyInfo();
   Future<CheckinResult> dailyCheckin();
   Future<void> postComment(String albumId, String comment, {String? commentId, bool spoiler = false});
+  Future<String> createServerDownload(String albumId, {String downloadType = 'folder', String? photoId});
 }

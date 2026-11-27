@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderOpen, RefreshCw, Search, Trash2 } from 'lucide-react';
+import { BookOpen, Download, FolderOpen, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { api, type LocalComic } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
@@ -18,6 +18,11 @@ export function LibraryPage() {
   const { data: items = [], isLoading } = useQuery({
     queryKey: ['library'],
     queryFn: api.listLibrary,
+  });
+
+  const { data: history = [] } = useQuery({
+    queryKey: ['history'],
+    queryFn: api.listHistory,
   });
 
   const { data: detail } = useQuery({
@@ -50,9 +55,18 @@ export function LibraryPage() {
     const q = filter.trim().toLowerCase();
     if (!q) return items;
     return items.filter(
-      (i) => i.title.toLowerCase().includes(q) || i.album_id.toLowerCase().includes(q)
+      (i) =>
+        i.title.toLowerCase().includes(q) ||
+        i.album_id.toLowerCase().includes(q) ||
+        i.author.toLowerCase().includes(q) ||
+        i.tags.some((t) => t.toLowerCase().includes(q))
     );
   }, [items, filter]);
+
+  const selectedHistory = useMemo(
+    () => (selected ? history.find((h) => h.album_id === selected.album_id) : undefined),
+    [history, selected]
+  );
 
   return (
     <div className="space-y-7">
@@ -107,13 +121,21 @@ export function LibraryPage() {
             <ComicCard
               key={item.album_id}
               onClick={() => setSelected(item)}
-              badge={item.format === 'zip' ? 'ZIP' : `${item.page_count}P`}
+              badge={
+                item.format === 'zip'
+                  ? item.chapter_count > 1
+                    ? `ZIP · ${item.chapter_count}话`
+                    : 'ZIP'
+                  : item.format === 'pdf'
+                    ? 'PDF'
+                    : `${item.page_count}P`
+              }
               album={{
                 album_id: item.album_id,
                 title: item.title,
-                author: `${(item.size_bytes / 1024 / 1024).toFixed(1)} MB`,
+                author: [item.author, `${(item.size_bytes / 1024 / 1024).toFixed(1)} MB`].filter(Boolean).join(' · '),
                 tags: item.tags,
-                cover_url: `/api/v2/library/${item.album_id}/cover`,
+                cover_url: item.format === 'pdf' ? '' : `/api/v2/library/${item.album_id}/cover`,
               }}
             />
           ))}
@@ -127,30 +149,72 @@ export function LibraryPage() {
       >
         {selected && (
           <div className="space-y-4">
-            <div className="text-[12.5px] break-all px-1" style={{ color: 'var(--liquid-muted)' }}>
-              路径：{selected.path}
+            <div className="text-[12.5px] break-all px-1 space-y-1" style={{ color: 'var(--liquid-muted)' }}>
+              {selected.author && <div>作者：{selected.author}</div>}
+              <div>路径：{selected.path}</div>
             </div>
-            <InsetGroup title={`章节 (${detail?.chapters?.length || selected.chapter_count})`}>
-              {(detail?.chapters || [{ chapter_id: '1', index: 1, name: selected.title, page_count: selected.page_count }]).map(
-                (ch, idx, arr) => (
+            {selectedHistory && selected.format !== 'pdf' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(null);
+                  navigate(`/read/local/${selected.album_id}/${selectedHistory.photo_id}?page=${selectedHistory.page_index}`);
+                }}
+                className="w-full min-h-[42px] inline-flex items-center justify-center gap-2 px-5 py-2 rounded-full text-[13.5px] font-semibold text-white cursor-pointer liquid-tactile"
+                style={{ backgroundColor: 'var(--liquid-scene)' }}
+              >
+                <BookOpen className="w-4 h-4" /> 继续阅读（第 {selectedHistory.page_index + 1} 页）
+              </button>
+            )}
+            {selected.format === 'pdf' ? (
+              <InsetGroup title="PDF 文档">
+                <InsetRow
+                  label="在浏览器中打开 PDF"
+                  sublabel="直接在线预览本地 PDF 漫画"
+                  onClick={() => window.open(api.getLibraryExportUrl(selected.album_id, true), '_blank')}
+                  right={<BookOpen className="w-4 h-4" style={{ color: 'var(--liquid-accent)' }} />}
+                />
+                <InsetRow
+                  label="下载 PDF 到本机"
+                  isLast
+                  onClick={() => window.open(api.getLibraryExportUrl(selected.album_id), '_blank')}
+                  right={<Download className="w-4 h-4" style={{ color: 'var(--liquid-accent)' }} />}
+                />
+              </InsetGroup>
+            ) : (
+              <>
+                <InsetGroup title={`章节 (${detail?.chapters?.length || selected.chapter_count})`}>
+                  {(detail?.chapters || [{ chapter_id: '1', index: 1, name: selected.title, page_count: selected.page_count }]).map(
+                    (ch, idx, arr) => (
+                      <InsetRow
+                        key={ch.chapter_id}
+                        label={ch.name}
+                        sublabel={`${ch.page_count} 页`}
+                        isLast={idx === arr.length - 1}
+                        onClick={() => {
+                          setSelected(null);
+                          navigate(`/read/local/${selected.album_id}/${ch.chapter_id}`);
+                        }}
+                        right={
+                          <span className="text-[13px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
+                            阅读
+                          </span>
+                        }
+                      />
+                    )
+                  )}
+                </InsetGroup>
+                <InsetGroup>
                   <InsetRow
-                    key={ch.chapter_id}
-                    label={ch.name}
-                    sublabel={`${ch.page_count} 页`}
-                    isLast={idx === arr.length - 1}
-                    onClick={() => {
-                      setSelected(null);
-                      navigate(`/read/local/${selected.album_id}/${ch.chapter_id}`);
-                    }}
-                    right={
-                      <span className="text-[13px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
-                        阅读
-                      </span>
-                    }
+                    label="导出打包下载到本地 (.zip)"
+                    sublabel="将本地漫画打包下载至当前浏览器设备"
+                    isLast
+                    onClick={() => window.open(api.getLibraryExportUrl(selected.album_id), '_blank')}
+                    right={<Download className="w-4 h-4" style={{ color: 'var(--liquid-accent)' }} />}
                   />
-                )
-              )}
-            </InsetGroup>
+                </InsetGroup>
+              </>
+            )}
             <InsetGroup>
               <InsetRow
                 label="删除本地漫画文件"

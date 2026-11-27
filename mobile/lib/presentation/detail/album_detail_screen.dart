@@ -26,6 +26,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
   bool _loading = true;
   bool _commentsLoading = false;
   bool _caching = false;
+  String _cacheProgressText = '';
   bool _favBusy = false;
   bool _isFavorite = false;
   bool _epReverse = false;
@@ -164,20 +165,56 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
     }
   }
 
-  Future<void> _cacheFirstChapter() async {
-    final d = _detail;
-    if (d == null || d.episodes.isEmpty || _caching) return;
-    setState(() => _caching = true);
+  Future<void> _cacheEpisodes(List<ComicEpisode> targets) async {
+    if (targets.isEmpty || _caching) return;
+    setState(() {
+      _caching = true;
+      _cacheProgressText = '准备中';
+    });
+    var totalPages = 0;
     try {
+      final d = _detail;
       final ctrl = ref.read(hybridControllerProvider.notifier);
-      final imgs = await ctrl.activeSource.getChapterImages(d.episodes.first.photoId);
-      await ctrl.cacheChapterOffline(d.episodes.first.photoId, imgs);
+      for (var i = 0; i < targets.length; i++) {
+        final ep = targets[i];
+        final imgs = await ctrl.activeSource.getChapterImages(ep.photoId);
+        await ctrl.cacheChapterOffline(
+          ep.photoId,
+          imgs,
+          albumId: widget.albumId,
+          albumTitle: d?.title ?? 'JM${widget.albumId}',
+          chapterTitle: '第 ${ep.index} 话 ${ep.name}'.trim(),
+          coverUrl: d?.coverUrl ?? '',
+          onProgress: (done, total) {
+            if (!mounted) return;
+            setState(() {
+              _cacheProgressText = targets.length > 1
+                  ? '${i + 1}/${targets.length}话'
+                  : '$done/$total页';
+            });
+          },
+        );
+        totalPages += imgs.length;
+      }
       if (mounted) {
         showCupertinoDialog(
           context: context,
           builder: (ctx) => CupertinoAlertDialog(
             title: const Text('离线缓存完成'),
-            content: Text('已缓存 ${imgs.length} 页到本地手机存储'),
+            content: Text('已缓存 ${targets.length} 话共 $totalPages 页到本地手机存储，可在「书架 → 离线缓存」查看'),
+            actions: [
+              CupertinoDialogAction(child: const Text('好'), onPressed: () => Navigator.pop(ctx)),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('离线缓存失败'),
+            content: Text('$e'.replaceFirst('Exception: ', '')),
             actions: [
               CupertinoDialogAction(child: const Text('好'), onPressed: () => Navigator.pop(ctx)),
             ],
@@ -185,8 +222,359 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
         );
       }
     } finally {
-      if (mounted) setState(() => _caching = false);
+      if (mounted) {
+        setState(() {
+          _caching = false;
+          _cacheProgressText = '';
+        });
+      }
     }
+  }
+
+  Future<void> _triggerServerDownload(String downloadType) async {
+    try {
+      final src = ref.read(hybridControllerProvider.notifier).activeSource;
+      final taskId = await src.createServerDownload(widget.albumId, downloadType: downloadType);
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('已创建下载任务'),
+            content: Text(taskId.isNotEmpty ? '服务端下载任务 #$taskId 已加入队列' : '服务端已开始下载'),
+            actions: [
+              CupertinoDialogAction(child: const Text('好'), onPressed: () => Navigator.pop(ctx)),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('创建下载失败'),
+            content: Text('$e'.replaceFirst('Exception: ', '')),
+            actions: [
+              CupertinoDialogAction(child: const Text('好'), onPressed: () => Navigator.pop(ctx)),
+            ],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openLocalShelfPicker(ComicDetail d) async {
+    final hybrid = ref.read(hybridControllerProvider);
+    if (hybrid.activeMode != ActiveMode.lanServer) {
+      showCupertinoDialog(
+        context: context,
+        builder: (ctx) => CupertinoAlertDialog(
+          title: const Text('仅局域网模式支持本地书单'),
+          content: const Text('当前处于直连模式，请连接局域网服务端后再将作品加入本地书单。'),
+          actions: [CupertinoDialogAction(child: const Text('知道了'), onPressed: () => Navigator.pop(ctx))],
+        ),
+      );
+      return;
+    }
+
+    final lan = ref.read(hybridControllerProvider.notifier).lanSource;
+    try {
+      final results = await Future.wait([
+        lan.listShelves(),
+        lan.listAlbumShelves(d.albumId),
+      ]);
+      var shelves = results[0] as List<LocalShelfModel>;
+      var joined = (results[1] as List<String>).toSet();
+      if (!mounted) return;
+
+      await showCupertinoModalPopup<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            Future<void> createAndAdd() async {
+              final ctrl = TextEditingController();
+              final name = await showCupertinoDialog<String>(
+                context: ctx,
+                builder: (dctx) => CupertinoAlertDialog(
+                  title: const Text('新建本地书单'),
+                  content: Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: CupertinoTextField(controller: ctrl, placeholder: '输入书单名称'),
+                  ),
+                  actions: [
+                    CupertinoDialogAction(child: const Text('取消'), onPressed: () => Navigator.pop(dctx)),
+                    CupertinoDialogAction(
+                      isDefaultAction: true,
+                      onPressed: () => Navigator.pop(dctx, ctrl.text.trim()),
+                      child: const Text('创建并加入'),
+                    ),
+                  ],
+                ),
+              );
+              ctrl.dispose();
+              if (name == null || name.isEmpty) return;
+              final created = await lan.saveShelf(name);
+              await lan.addShelfItem(
+                created.shelfId,
+                albumId: d.albumId,
+                title: d.title,
+                author: d.authors.join(', '),
+                coverUrl: d.coverUrl,
+                tags: d.tags,
+              );
+              shelves = await lan.listShelves();
+              joined.add(created.shelfId);
+              if (ctx.mounted) setSheetState(() {});
+            }
+
+            return ClipRRect(
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(LiquidTokens.radiusSheet)),
+              child: LiquidGlassSurface(
+                variant: LiquidGlassVariant.tinted,
+                borderRadius: LiquidTokens.radiusSheet,
+                padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+                child: SafeArea(
+                  top: false,
+                  child: SizedBox(
+                    height: MediaQuery.of(ctx).size.height * 0.56,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('加入本地书单', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                            CupertinoButton(
+                              padding: EdgeInsets.zero,
+                              onPressed: createAndAdd,
+                              child: const Text('+ 新建'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Expanded(
+                          child: shelves.isEmpty
+                              ? Center(
+                                  child: Text(
+                                    '暂无本地书单，点击右上角「+ 新建」',
+                                    style: TextStyle(color: LiquidTokens.muted(ctx)),
+                                  ),
+                                )
+                              : LiquidSolidCard(
+                                  padding: EdgeInsets.zero,
+                                  child: ListView.separated(
+                                    itemCount: shelves.length,
+                                    separatorBuilder: (_, __) => Container(height: 0.7, color: LiquidTokens.separator(ctx)),
+                                    itemBuilder: (_, idx) {
+                                      final s = shelves[idx];
+                                      final active = joined.contains(s.shelfId);
+                                      return CupertinoListTile(
+                                        title: Text(s.name),
+                                        subtitle: Text('${s.itemCount} 部作品'),
+                                        trailing: Icon(
+                                          active ? CupertinoIcons.checkmark_circle_fill : CupertinoIcons.circle,
+                                          color: active ? LiquidTokens.accentStrong(ctx) : LiquidTokens.muted(ctx),
+                                        ),
+                                        onTap: () async {
+                                          if (active) {
+                                            await lan.removeShelfItem(s.shelfId, d.albumId);
+                                            joined.remove(s.shelfId);
+                                          } else {
+                                            await lan.addShelfItem(
+                                              s.shelfId,
+                                              albumId: d.albumId,
+                                              title: d.title,
+                                              author: d.authors.join(', '),
+                                              coverUrl: d.coverUrl,
+                                              tags: d.tags,
+                                            );
+                                            joined.add(s.shelfId);
+                                          }
+                                          if (ctx.mounted) setSheetState(() {});
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        showCupertinoDialog(
+          context: context,
+          builder: (ctx) => CupertinoAlertDialog(
+            title: const Text('读取书单失败'),
+            content: Text('$e'.replaceFirst('Exception: ', '')),
+            actions: [CupertinoDialogAction(child: const Text('好'), onPressed: () => Navigator.pop(ctx))],
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _openChapterCachePicker(ComicDetail d) async {
+    final picked = await showCupertinoModalPopup<ComicEpisode>(
+      context: context,
+      builder: (ctx) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(LiquidTokens.radiusSheet)),
+        child: LiquidGlassSurface(
+          variant: LiquidGlassVariant.tinted,
+          borderRadius: LiquidTokens.radiusSheet,
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 22),
+          child: SafeArea(
+            top: false,
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.56,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: LiquidTokens.separator(ctx),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('选择要离线缓存的章节', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: LiquidSolidCard(
+                      padding: EdgeInsets.zero,
+                      child: ListView.separated(
+                        physics: const BouncingScrollPhysics(),
+                        itemCount: d.episodes.length,
+                        separatorBuilder: (_, __) => Container(height: 0.7, color: LiquidTokens.separator(ctx)),
+                        itemBuilder: (_, idx) {
+                          final ep = d.episodes[idx];
+                          return CupertinoListTile(
+                            title: Text(
+                              '第 ${ep.index} 话 ${ep.name}'.trim(),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            trailing: const CupertinoListTileChevron(),
+                            onTap: () => Navigator.pop(ctx, ep),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (picked != null) {
+      await _cacheEpisodes([picked]);
+    }
+  }
+
+  Future<void> _openDownloadSheet(ComicDetail d) async {
+    if (_caching) return;
+    final src = ref.read(hybridControllerProvider.notifier).activeSource;
+    final hasEpisodes = d.episodes.isNotEmpty;
+    final supportsServer = src.supportsServerDownload;
+
+    await showCupertinoModalPopup<void>(
+      context: context,
+      builder: (ctx) => CupertinoActionSheet(
+        title: const Text('下载与离线缓存'),
+        message: Text(
+          supportsServer
+              ? '可离线缓存到手机，或创建局域网服务端下载任务'
+              : '将解密后的漫画章节缓存到手机本地存储',
+        ),
+        actions: [
+          CupertinoActionSheetAction(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _openLocalShelfPicker(d);
+            },
+            child: const Text('加入本地书单 / 标签'),
+          ),
+          if (hasEpisodes && d.episodes.length == 1)
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _cacheEpisodes([d.episodes.first]);
+              },
+              child: const Text('离线缓存到手机'),
+            ),
+          if (hasEpisodes && d.episodes.length > 1) ...[
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _cacheEpisodes([d.episodes.first]);
+              },
+              child: Text('离线缓存第 ${d.episodes.first.index} 话'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _openChapterCachePicker(d);
+              },
+              child: const Text('选择章节离线缓存'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _cacheEpisodes(d.episodes);
+              },
+              child: Text('离线缓存全部 (${d.episodes.length} 话)'),
+            ),
+          ],
+          if (supportsServer) ...[
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _triggerServerDownload('folder');
+              },
+              child: const Text('下载到服务端 · 图片文件夹'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _triggerServerDownload('zip');
+              },
+              child: const Text('下载到服务端 · ZIP 压缩包'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _triggerServerDownload('pdf');
+              },
+              child: const Text('下载到服务端 · PDF 文档'),
+            ),
+            CupertinoActionSheetAction(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _triggerServerDownload('long_img');
+              },
+              child: const Text('下载到服务端 · 长图 PNG'),
+            ),
+          ],
+        ],
+        cancelButton: CupertinoActionSheetAction(
+          isDestructiveAction: true,
+          onPressed: () => Navigator.pop(ctx),
+          child: const Text('取消'),
+        ),
+      ),
+    );
   }
 
   Future<void> _openPostComment({CommentItemModel? replyTo}) async {
@@ -291,6 +679,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                     coverUrl: d.coverUrl,
                     fallbacks: d.coverFallbacks,
                     borderRadius: 0,
+                    allowPreview: false,
                   ),
                 ),
               ),
@@ -348,6 +737,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                         width: 116,
                         height: 160,
                         borderRadius: 17,
+                        tapToPreview: true,
                       ),
                     ),
                     const SizedBox(width: 15),
@@ -578,9 +968,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                         width: 136,
                         child: ModernComicCard(
                           album: rel,
-                          onTap: () => Navigator.of(context).push(
-                            CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: rel.albumId)),
-                          ),
+                          onTap: () => openAlbumDetailScreen(context, rel.albumId),
                         ),
                       );
                     },
@@ -736,6 +1124,7 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                     albumId: d.albumId,
                     photoId: ep.photoId,
                     title: d.title,
+                    coverUrl: d.coverUrl,
                     episodes: d.episodes,
                   ),
                 ),
@@ -943,22 +1332,41 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                                           albumId: d.albumId,
                                           photoId: historyMatch?.photoId ?? d.episodes.first.photoId,
                                           title: d.title,
+                                          coverUrl: d.coverUrl,
                                           initialPage: historyMatch?.pageIndex ?? 0,
                                           episodes: d.episodes,
                                         ),
-                                child: Container(
-                                  height: 46,
-                                  decoration: BoxDecoration(
-                                    color: LiquidTokens.scene(context),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    historyMatch != null ? '继续阅读 (第${historyMatch.pageIndex + 1}页)' : '开始阅读',
-                                    style: const TextStyle(
-                                      color: CupertinoColors.white,
-                                      fontSize: 14.5,
-                                      fontWeight: FontWeight.w600,
+                                child: Opacity(
+                                  opacity: d.episodes.isEmpty ? 0.5 : 1.0,
+                                  child: Container(
+                                    height: 46,
+                                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                                    decoration: BoxDecoration(
+                                      color: LiquidTokens.scene(context),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Row(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(CupertinoIcons.book_fill, size: 16, color: CupertinoColors.white),
+                                        const SizedBox(width: 6),
+                                        Flexible(
+                                          child: Text(
+                                            historyMatch != null
+                                                ? '继续阅读 (第${historyMatch.pageIndex + 1}页)'
+                                                : '开始阅读',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: CupertinoColors.white,
+                                              fontSize: 14.5,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -969,40 +1377,91 @@ class _AlbumDetailScreenState extends ConsumerState<AlbumDetailScreen> {
                               onTap: _favBusy ? null : _toggleFavorite,
                               child: Container(
                                 height: 46,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 13),
                                 decoration: BoxDecoration(
                                   color: LiquidTokens.solid(context),
                                   borderRadius: BorderRadius.circular(999),
                                   border: Border.all(color: LiquidTokens.separator(context)),
                                 ),
-                                child: Icon(
-                                  _isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-                                  size: 20,
-                                  color: _isFavorite
-                                      ? CupertinoColors.systemRed
-                                      : LiquidTokens.muted(context),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      _isFavorite ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
+                                      size: 18,
+                                      color: _isFavorite
+                                          ? CupertinoColors.systemRed
+                                          : LiquidTokens.muted(context),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _isFavorite ? '已收藏' : '收藏',
+                                      style: TextStyle(
+                                        color: _isFavorite
+                                            ? CupertinoColors.systemRed
+                                            : LiquidTokens.ink(context),
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
                             const SizedBox(width: 6),
                             LiquidSpringControl(
-                              onTap: _caching ? null : _cacheFirstChapter,
+                              onTap: () => _openLocalShelfPicker(d),
                               child: Container(
                                 height: 46,
-                                padding: const EdgeInsets.symmetric(horizontal: 16),
+                                padding: const EdgeInsets.symmetric(horizontal: 11),
                                 decoration: BoxDecoration(
                                   color: LiquidTokens.solid(context),
                                   borderRadius: BorderRadius.circular(999),
                                   border: Border.all(color: LiquidTokens.separator(context)),
                                 ),
                                 alignment: Alignment.center,
-                                child: Text(
-                                  _caching ? '缓存中' : '缓存',
-                                  style: TextStyle(
-                                    color: LiquidTokens.accentStrong(context),
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                                child: Icon(
+                                  CupertinoIcons.folder_badge_plus,
+                                  size: 18,
+                                  color: LiquidTokens.accentStrong(context),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            LiquidSpringControl(
+                              onTap: _caching ? null : () => _openDownloadSheet(d),
+                              child: Container(
+                                height: 46,
+                                padding: const EdgeInsets.symmetric(horizontal: 13),
+                                decoration: BoxDecoration(
+                                  color: LiquidTokens.solid(context),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: LiquidTokens.separator(context)),
+                                ),
+                                alignment: Alignment.center,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    if (_caching)
+                                      const CupertinoActivityIndicator(radius: 8)
+                                    else
+                                      Icon(
+                                        CupertinoIcons.arrow_down_to_line,
+                                        size: 17,
+                                        color: LiquidTokens.accentStrong(context),
+                                      ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      _caching
+                                          ? (_cacheProgressText.isNotEmpty ? _cacheProgressText : '下载中')
+                                          : '下载',
+                                      style: TextStyle(
+                                        color: LiquidTokens.accentStrong(context),
+                                        fontSize: 13.5,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),

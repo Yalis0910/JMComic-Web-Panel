@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:dio/io.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/jm_crypto.dart';
@@ -61,6 +62,12 @@ class DirectJmSource implements ComicDataSource {
   final Map<String, ({DateTime fetchedAt, PagedComicsResult result})> _pagedCache = {};
   UserAccountStatus _account = UserAccountStatus.empty;
 
+  /// 代理开关或地址变更后重建连接池，使新路由立即生效。
+  void resetHttpClient() {
+    _dio.httpClientAdapter.close(force: true);
+    _dio.httpClientAdapter = IOHttpClientAdapter();
+  }
+
   @override
   ActiveMode get mode => ActiveMode.directJm;
 
@@ -69,6 +76,14 @@ class DirectJmSource implements ComicDataSource {
 
   @override
   bool get supportsWebOnlyFilters => false;
+
+  @override
+  bool get supportsServerDownload => false;
+
+  @override
+  Future<String> createServerDownload(String albumId, {String downloadType = 'folder', String? photoId}) {
+    throw UnsupportedError('直连模式不支持创建服务端下载任务');
+  }
 
   String get _cookieHeader {
     if (_cookies.isEmpty) return '';

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarCheck, CalendarDays, Check, Download, LogOut, Sparkles, Trash2 } from 'lucide-react';
+import { Bookmark, CalendarCheck, CalendarDays, Check, Download, FolderHeart, LogOut, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { api, getPanelToken } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
@@ -15,11 +15,13 @@ export function FavoritesPage() {
   const queryClient = useQueryClient();
   const { showToast } = useAppStore();
 
-  const activeTab = (params.get('tab') as 'fav' | 'history') || 'fav';
+  const activeTab = (params.get('tab') as 'fav' | 'shelves' | 'bookmarks' | 'history') || 'fav';
   const [folderId, setFolderId] = useState('0');
   const [orderBy, setOrderBy] = useState('mr');
   const [page, setPage] = useState(1);
   const [dailyOpen, setDailyOpen] = useState(false);
+  const [selectedShelfId, setSelectedShelfId] = useState<string>('');
+  const [newShelfName, setNewShelfName] = useState('');
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +42,36 @@ export function FavoritesPage() {
     queryKey: ['history'],
     queryFn: api.listHistory,
     enabled: activeTab === 'history',
+  });
+
+  const { data: shelves = [] } = useQuery({
+    queryKey: ['shelves'],
+    queryFn: api.listShelves,
+    enabled: activeTab === 'shelves',
+  });
+
+  const activeShelfId = selectedShelfId || shelves[0]?.shelf_id || '';
+  const { data: shelfItems = [] } = useQuery({
+    queryKey: ['shelfItems', activeShelfId],
+    queryFn: () => api.listShelfItems(activeShelfId),
+    enabled: activeTab === 'shelves' && !!activeShelfId,
+  });
+
+  const { data: bookmarks = [] } = useQuery({
+    queryKey: ['bookmarks'],
+    queryFn: () => api.listBookmarks(),
+    enabled: activeTab === 'bookmarks',
+  });
+
+  const createShelfMutation = useMutation({
+    mutationFn: () => api.saveShelf({ name: newShelfName.trim() }),
+    onSuccess: (created) => {
+      setNewShelfName('');
+      setSelectedShelfId(created.shelf_id);
+      showToast('书单已创建', 'success');
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
   });
 
   const loginMutation = useMutation({
@@ -106,7 +138,9 @@ export function FavoritesPage() {
           onChange={(t) => setParams({ tab: t })}
           options={[
             { value: 'fav', label: '云端收藏' },
-            { value: 'history', label: '阅读历史' },
+            { value: 'shelves', label: '本地书单' },
+            { value: 'bookmarks', label: '书签' },
+            { value: 'history', label: '历史' },
           ]}
         />
       </div>
@@ -288,6 +322,189 @@ export function FavoritesPage() {
         </>
       )}
 
+      {activeTab === 'shelves' && (
+        <div className="space-y-5">
+          <LiquidGlass variant="tinted" radius={24} className="p-3.5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (newShelfName.trim()) createShelfMutation.mutate();
+              }}
+              className="flex flex-wrap sm:flex-nowrap items-center gap-2.5"
+            >
+              <input
+                type="text"
+                value={newShelfName}
+                onChange={(e) => setNewShelfName(e.target.value)}
+                placeholder="新建本地书单 / 标签（无需登录）..."
+                className="flex-1 min-w-[180px] min-h-[42px] rounded-full px-4 py-2 text-[14.5px] outline-none liquid-focus-ring"
+                style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
+              />
+              <button
+                type="submit"
+                disabled={!newShelfName.trim() || createShelfMutation.isPending}
+                className="min-h-[42px] inline-flex items-center gap-1.5 px-5 py-2 rounded-full text-[13.5px] font-semibold text-white cursor-pointer disabled:opacity-50 liquid-tactile"
+                style={{ backgroundColor: 'var(--liquid-scene)' }}
+              >
+                <Plus className="w-4 h-4" /> 新建书单
+              </button>
+            </form>
+          </LiquidGlass>
+
+          {shelves.length === 0 ? (
+            <div className="liquid-solid-card p-10 text-center space-y-2">
+              <FolderHeart className="w-9 h-9 mx-auto opacity-30" />
+              <p className="text-[15px] font-semibold">暂无本地书单</p>
+              <p className="text-[13px]" style={{ color: 'var(--liquid-muted)' }}>
+                可在上方新建书单，并在任意漫画详情页点击「加书单」分类收藏
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                {shelves.map((s) => {
+                  const active = s.shelf_id === activeShelfId;
+                  return (
+                    <div
+                      key={s.shelf_id}
+                      className="inline-flex items-center rounded-full overflow-hidden"
+                      style={{
+                        backgroundColor: active ? 'var(--liquid-scene)' : 'var(--liquid-solid)',
+                        border: active ? '1px solid transparent' : '1px solid var(--liquid-separator)',
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedShelfId(s.shelf_id)}
+                        className="min-h-[38px] pl-4 pr-2.5 py-1.5 text-[13px] font-medium cursor-pointer"
+                        style={{ color: active ? '#ffffff' : 'var(--liquid-ink)' }}
+                      >
+                        {s.name} ({s.item_count})
+                      </button>
+                      <button
+                        type="button"
+                        title="删除书单"
+                        onClick={async () => {
+                          await api.deleteShelf(s.shelf_id);
+                          if (selectedShelfId === s.shelf_id) setSelectedShelfId('');
+                          queryClient.invalidateQueries({ queryKey: ['shelves'] });
+                          showToast('书单已删除');
+                        }}
+                        className="pr-3 pl-1 py-1.5 cursor-pointer opacity-70 hover:opacity-100"
+                        style={{ color: active ? '#ffffff' : 'var(--liquid-danger)' }}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {shelfItems.length === 0 ? (
+                <div className="liquid-solid-card p-10 text-center text-[13.5px]" style={{ color: 'var(--liquid-muted)' }}>
+                  该书单暂无作品，可在漫画详情页点击「加书单」添加
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-5">
+                  {shelfItems.map((item) => (
+                    <div key={item.album_id} className="relative group/shelf">
+                      <ComicCard
+                        album={{
+                          album_id: item.album_id,
+                          title: item.title,
+                          author: item.author,
+                          tags: item.tags,
+                          cover_url: item.cover_url || `/api/v2/media/cover/${item.album_id}`,
+                        }}
+                      />
+                      <button
+                        type="button"
+                        title="从书单移除"
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          await api.removeShelfItem(activeShelfId, item.album_id);
+                          queryClient.invalidateQueries({ queryKey: ['shelfItems', activeShelfId] });
+                          queryClient.invalidateQueries({ queryKey: ['shelves'] });
+                        }}
+                        className="absolute top-2.5 right-2.5 z-20 w-7 h-7 rounded-full flex items-center justify-center text-white bg-black/55 opacity-0 group-hover/shelf:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'bookmarks' && (
+        <div className="space-y-4">
+          {bookmarks.length === 0 ? (
+            <div className="liquid-solid-card p-10 text-center space-y-2">
+              <Bookmark className="w-9 h-9 mx-auto opacity-30" />
+              <p className="text-[15px] font-semibold">暂无阅读书签</p>
+              <p className="text-[13px]" style={{ color: 'var(--liquid-muted)' }}>
+                阅读任意漫画时点击右上角书签按钮即可标记重要页码
+              </p>
+            </div>
+          ) : (
+            <InsetGroup title={`全部书签 (${bookmarks.length})`}>
+              {bookmarks.map((b, idx) => (
+                <div
+                  key={b.bookmark_id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/read/${b.source || 'online'}/${b.album_id}/${b.photo_id}?page=${b.page_index}`)}
+                  className={`flex items-center gap-3.5 px-5 py-3.5 cursor-pointer hover:bg-black/[0.025] dark:hover:bg-white/[0.035] ${
+                    idx < bookmarks.length - 1 ? 'liquid-hairline-b' : ''
+                  }`}
+                >
+                  <div className="w-12 aspect-[3/4] rounded-[10px] overflow-hidden shrink-0">
+                    <CoverImage src={b.cover_url || `/api/v2/media/cover/${b.album_id}`} alt={b.title} />
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[14.5px] font-semibold truncate">{b.title || `JM${b.album_id}`}</span>
+                      {b.source === 'local' && (
+                        <span
+                          className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold shrink-0"
+                          style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+                        >
+                          本地
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-[12px] tabular-nums" style={{ color: 'var(--liquid-muted)' }}>
+                      {b.chapter_title ? `${b.chapter_title} · ` : ''}第 {b.page_index + 1} 页 · {new Date(b.updated_at).toLocaleString()}
+                    </div>
+                    {b.note && (
+                      <div className="text-[12.5px] truncate" style={{ color: 'var(--liquid-ink)' }}>
+                        备注：{b.note}
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await api.deleteBookmark(b.bookmark_id);
+                      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+                    }}
+                    className="p-2 cursor-pointer opacity-65 hover:opacity-100"
+                    style={{ color: 'var(--liquid-danger)' }}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </InsetGroup>
+          )}
+        </div>
+      )}
+
       {activeTab === 'history' && (
         <div className="space-y-4">
           {history.length > 0 && (
@@ -320,7 +537,7 @@ export function FavoritesPage() {
                 return (
                   <div
                     key={h.album_id}
-                    onClick={() => navigate(`/read/online/${h.album_id}/${h.photo_id}?page=${h.page_index}`)}
+                    onClick={() => navigate(`/read/${h.source || 'online'}/${h.album_id}/${h.photo_id}?page=${h.page_index}`)}
                     role="button"
                     tabIndex={0}
                     className={`flex items-center gap-3.5 px-5 py-3.5 cursor-pointer hover:bg-black/[0.025] dark:hover:bg-white/[0.035] ${
@@ -331,7 +548,17 @@ export function FavoritesPage() {
                       <CoverImage src={h.cover_url || `/api/v2/media/cover/${h.album_id}`} alt={h.title} />
                     </div>
                     <div className="min-w-0 flex-1 space-y-1.5">
-                      <div className="text-[14.5px] font-semibold truncate">{h.title || `JM${h.album_id}`}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14.5px] font-semibold truncate">{h.title || `JM${h.album_id}`}</span>
+                        {h.source === 'local' && (
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold shrink-0"
+                            style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+                          >
+                            本地
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[12px] tabular-nums" style={{ color: 'var(--liquid-muted)' }}>
                         第 {h.page_index + 1} / {h.total_pages || '?'} 页 ({pct}%) · {new Date(h.updated_at).toLocaleString()}
                       </div>

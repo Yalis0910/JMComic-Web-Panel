@@ -336,19 +336,21 @@ class LiquidSegmentedPill<T> extends StatelessWidget {
                 top: 0,
                 bottom: 0,
                 width: itemWidth,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: onDarkScene
-                        ? CupertinoColors.white.withValues(alpha: 0.24)
-                        : (isDark ? const Color(0xFF25414A) : CupertinoColors.white),
-                    borderRadius: BorderRadius.circular(LiquidTokens.radiusPill),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF132529).withValues(alpha: isDark ? 0.28 : 0.09),
-                        blurRadius: 10,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
+                child: IgnorePointer(
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: onDarkScene
+                          ? CupertinoColors.white.withValues(alpha: 0.24)
+                          : (isDark ? const Color(0xFF25414A) : CupertinoColors.white),
+                      borderRadius: BorderRadius.circular(LiquidTokens.radiusPill),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF132529).withValues(alpha: isDark ? 0.28 : 0.09),
+                          blurRadius: 10,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),

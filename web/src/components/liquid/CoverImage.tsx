@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, EyeOff, RotateCw } from 'lucide-react';
+import { BookOpen, Eye, EyeOff, RotateCw } from 'lucide-react';
 import { withPanelToken } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 
@@ -19,15 +19,19 @@ export function CoverImage({
   allowRetry?: boolean;
 }) {
   const showCovers = useAppStore((s) => s.showCovers);
+  const coverPrivacyMode = useAppStore((s) => s.coverPrivacyMode);
+  const effectiveMode = coverPrivacyMode || (showCovers ? 'show' : 'hide');
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(src ? 'loading' : 'error');
   const [attempt, setAttempt] = useState(0);
+  const [tempReveal, setTempReveal] = useState(false);
 
   useEffect(() => {
     setStatus(src ? 'loading' : 'error');
     setAttempt(0);
-  }, [src, showCovers]);
+    setTempReveal(false);
+  }, [src, effectiveMode]);
 
-  if (!showCovers) {
+  if (effectiveMode === 'hide') {
     return (
       <div className={`relative w-full h-full overflow-hidden ${className}`}>
         <div
@@ -44,6 +48,7 @@ export function CoverImage({
     );
   }
 
+  const isBlurred = effectiveMode === 'blur' && !tempReveal;
   const tokenized = src ? withPanelToken(src) : '';
   const effectiveSrc =
     tokenized && attempt > 0
@@ -55,17 +60,38 @@ export function CoverImage({
       {status === 'loading' && <div className="absolute inset-0 skeleton-shimmer" />}
 
       {status !== 'error' && effectiveSrc ? (
-        <img
-          src={effectiveSrc}
-          alt={alt}
-          loading={loading}
-          decoding="async"
-          onLoad={() => setStatus('loaded')}
-          onError={() => setStatus('error')}
-          className={`h-full w-full object-cover transition-all duration-300 ${
-            status === 'loaded' ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
-          }`}
-        />
+        <>
+          <img
+            src={effectiveSrc}
+            alt={alt}
+            loading={loading}
+            decoding="async"
+            onLoad={() => setStatus('loaded')}
+            onError={() => setStatus('error')}
+            className={`h-full w-full object-cover transition-all duration-300 ${
+              status === 'loaded' ? 'opacity-100 scale-100' : 'opacity-0 scale-[1.02]'
+            } ${isBlurred ? 'blur-xl scale-110' : ''}`}
+          />
+          {effectiveMode === 'blur' && status === 'loaded' && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setTempReveal((v) => !v);
+              }}
+              title={isBlurred ? '点击临时预览封面' : '恢复模糊'}
+              className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10.5px] font-medium text-white backdrop-blur-md cursor-pointer"
+              style={{
+                backgroundColor: 'rgba(15, 25, 32, 0.56)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+              }}
+            >
+              {isBlurred ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+              <span>{isBlurred ? '预览' : '遮罩'}</span>
+            </button>
+          )}
+        </>
       ) : (
         <div
           className="h-full w-full flex flex-col items-center justify-center gap-2 px-3 text-center"

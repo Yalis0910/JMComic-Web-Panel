@@ -1,7 +1,9 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/network/app_proxy.dart';
 import 'data/repositories/hybrid_controller.dart';
+import 'data/sources/comic_data_source.dart';
 import 'presentation/explore/explore_screen.dart';
 import 'presentation/home/home_screen.dart';
 import 'presentation/library/library_screen.dart';
@@ -9,8 +11,9 @@ import 'presentation/settings/settings_screen.dart';
 import 'presentation/theme/liquid_glass_theme.dart';
 import 'presentation/widgets/liquid_glass.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppProxyManager.instance.loadFromPrefs();
   runApp(const ProviderScope(child: JmlisApp()));
 }
 
@@ -19,7 +22,13 @@ class JmlisApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dark = ref.watch(hybridControllerProvider.select((s) => s.settings.darkMode));
+    final themeMode = ref.watch(hybridControllerProvider.select((s) => s.settings.themeMode));
+    final platformDark = WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.dark;
+    final dark = switch (themeMode) {
+      AppThemeMode.dark => true,
+      AppThemeMode.light => false,
+      AppThemeMode.system => platformDark,
+    };
     return CupertinoApp(
       title: 'JMlis',
       debugShowCheckedModeBanner: false,
@@ -69,6 +78,7 @@ class _RootTabScaffoldState extends State<_RootTabScaffold> {
                       key: const ValueKey('tab_0'),
                       builder: (_) => HomeScreen(
                         onOpenExplore: () => setState(() => _index = 1),
+                        onOpenSettings: () => setState(() => _index = 3),
                       ),
                     ),
                   1 => CupertinoTabView(

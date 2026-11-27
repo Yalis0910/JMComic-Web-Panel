@@ -4,17 +4,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft,
   ArrowUpDown,
+  Bookmark,
   BookOpen,
+  Check,
   Download,
   FolderHeart,
   Heart,
   LayoutGrid,
   List,
+  ListPlus,
   MessageCircle,
+  Plus,
   Send,
+  Trash2,
   X,
 } from 'lucide-react';
-import { api, type CommentItem, type DownloadTask } from '../../api/client';
+import { api, withPanelToken, type CommentItem, type DownloadTask } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { BottomSheet, InsetGroup, InsetRow, PaginationBar } from '../../components/liquid/LiquidControls';
 import { ComicCard } from '../../components/liquid/ComicCard';
@@ -27,10 +32,15 @@ export function AlbumDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { showToast, showCovers } = useAppStore();
+  const { showToast, showCovers, coverPrivacyMode } = useAppStore();
+  const canShowBackdrop = coverPrivacyMode ? coverPrivacyMode === 'show' : showCovers;
 
   const [dlSheetOpen, setDlSheetOpen] = useState(false);
+  const [dlTargetPhotoId, setDlTargetPhotoId] = useState<string | null>(null);
+  const [dlTargetLabel, setDlTargetLabel] = useState<string>('');
   const [favSheetOpen, setFavSheetOpen] = useState(false);
+  const [shelfSheetOpen, setShelfSheetOpen] = useState(false);
+  const [newShelfName, setNewShelfName] = useState('');
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentPage, setCommentPage] = useState(1);
   const [commentText, setCommentText] = useState('');
@@ -62,6 +72,24 @@ export function AlbumDetailPage() {
     queryFn: api.listHistory,
   });
 
+  const { data: albumBookmarks = [] } = useQuery({
+    queryKey: ['bookmarks', id],
+    queryFn: () => api.listBookmarks(id),
+    enabled: !!id,
+  });
+
+  const { data: shelves = [] } = useQuery({
+    queryKey: ['shelves'],
+    queryFn: api.listShelves,
+    enabled: shelfSheetOpen,
+  });
+
+  const { data: albumShelfIds = [] } = useQuery({
+    queryKey: ['albumShelves', id],
+    queryFn: () => api.listAlbumShelves(id),
+    enabled: !!id,
+  });
+
   const { data: commentsData, isLoading: commentsLoading } = useQuery({
     queryKey: ['comments', id, commentPage],
     queryFn: () => api.getComments(id, commentPage),
@@ -81,11 +109,59 @@ export function AlbumDetailPage() {
   });
 
   const dlMutation = useMutation({
-    mutationFn: (fmt: DownloadTask['download_type']) => api.createDownload(id, fmt),
+    mutationFn: (fmt: DownloadTask['download_type']) =>
+      api.createDownload(id, fmt, dlTargetPhotoId || undefined),
     onSuccess: (task) => {
       setDlSheetOpen(false);
+      setDlTargetPhotoId(null);
+      setDlTargetLabel('');
       showToast(`已创建下载任务 #${task.task_id}`, 'success');
       queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const toggleShelfMutation = useMutation({
+    mutationFn: async ({ shelfId, inShelf }: { shelfId: string; inShelf: boolean }) => {
+      if (inShelf) {
+        await api.removeShelfItem(shelfId, id);
+      } else if (album) {
+        await api.addShelfItem(shelfId, {
+          album_id: album.album_id,
+          title: album.title,
+          author: album.authors.join(', '),
+          cover_url: album.cover_url,
+          tags: album.tags,
+        });
+      }
+    },
+    onSuccess: (_, vars) => {
+      showToast(vars.inShelf ? '已从书单移除' : '已加入本地书单', 'success');
+      queryClient.invalidateQueries({ queryKey: ['albumShelves', id] });
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const createShelfMutation = useMutation({
+    mutationFn: async () => {
+      const created = await api.saveShelf({ name: newShelfName.trim() });
+      if (album) {
+        await api.addShelfItem(created.shelf_id, {
+          album_id: album.album_id,
+          title: album.title,
+          author: album.authors.join(', '),
+          cover_url: album.cover_url,
+          tags: album.tags,
+        });
+      }
+      return created;
+    },
+    onSuccess: (created) => {
+      setNewShelfName('');
+      showToast(`已创建书单「${created.name}」并加入本作`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['shelves'] });
+      queryClient.invalidateQueries({ queryKey: ['albumShelves', id] });
     },
     onError: (err: Error) => showToast(err.message, 'error'),
   });
@@ -147,11 +223,11 @@ export function AlbumDetailPage() {
     <div className="space-y-9">
       {/* Deep Sea Scenic Hero Banner with Clear Glass Controls */}
       <section className="relative overflow-hidden rounded-[28px] liquid-scene-stage text-white shadow-[0_20px_50px_-20px_rgba(19,37,41,0.45)]">
-        {showCovers && (
+        {canShowBackdrop && (
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-30 blur-3xl scale-125 bg-cover bg-center"
-            style={{ backgroundImage: `url(${album.cover_url})` }}
+            style={{ backgroundImage: `url(${withPanelToken(album.cover_url)})` }}
           />
         )}
         <div
@@ -323,10 +399,25 @@ export function AlbumDetailPage() {
                 <LiquidGlass variant="clear" tone="dark" radius={999} interactive>
                   <button
                     type="button"
-                    onClick={() => setDlSheetOpen(true)}
+                    onClick={() => {
+                      setDlTargetPhotoId(null);
+                      setDlTargetLabel('');
+                      setDlSheetOpen(true);
+                    }}
                     className="min-h-[46px] inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-[14px] font-medium text-white cursor-pointer liquid-focus-ring"
                   >
                     <Download className="w-4 h-4" /> 下载
+                  </button>
+                </LiquidGlass>
+
+                <LiquidGlass variant="clear" tone="dark" radius={999} interactive>
+                  <button
+                    type="button"
+                    onClick={() => setShelfSheetOpen(true)}
+                    className="min-h-[46px] inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-[14px] font-medium text-white cursor-pointer liquid-focus-ring"
+                  >
+                    <ListPlus className="w-4 h-4" />
+                    {albumShelfIds.length > 0 ? `书单 (${albumShelfIds.length})` : '加书单'}
                   </button>
                 </LiquidGlass>
 
@@ -381,26 +472,49 @@ export function AlbumDetailPage() {
             {sortedEpisodes.map((ep) => {
               const isCurrent = historyRecord?.photo_id === ep.photo_id;
               return (
-                <button
+                <div
                   key={ep.photo_id}
-                  type="button"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => navigate(`/read/online/${album.album_id}/${ep.photo_id}`)}
-                  className="liquid-solid-card liquid-card-hover px-4 py-3.5 text-left cursor-pointer liquid-focus-ring"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      navigate(`/read/online/${album.album_id}/${ep.photo_id}`);
+                    }
+                  }}
+                  className="liquid-solid-card liquid-card-hover px-4 py-3.5 text-left cursor-pointer liquid-focus-ring flex items-center justify-between gap-2"
                   style={{
                     backgroundColor: isCurrent ? 'var(--liquid-focus-soft)' : 'var(--liquid-solid)',
                     borderColor: isCurrent ? 'var(--liquid-focus)' : 'var(--liquid-rim-outer)',
                   }}
                 >
-                  <div
-                    className="text-[13.5px] font-semibold truncate"
-                    style={{ color: isCurrent ? 'var(--liquid-accent)' : 'var(--liquid-ink)' }}
+                  <div className="min-w-0">
+                    <div
+                      className="text-[13.5px] font-semibold truncate"
+                      style={{ color: isCurrent ? 'var(--liquid-accent)' : 'var(--liquid-ink)' }}
+                    >
+                      第 {ep.index} 话 {ep.name || ''}
+                    </div>
+                    <div className="text-[11px] mt-0.5 tabular-nums" style={{ color: 'var(--liquid-muted)' }}>
+                      {isCurrent ? '上次阅读' : `ID ${ep.photo_id}`}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    title="下载本话"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDlTargetPhotoId(ep.photo_id);
+                      setDlTargetLabel(`第 ${ep.index} 话 ${ep.name || ''}`.trim());
+                      setDlSheetOpen(true);
+                    }}
+                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"
+                    style={{ color: 'var(--liquid-accent)' }}
                   >
-                    第 {ep.index} 话 {ep.name || ''}
-                  </div>
-                  <div className="text-[11px] mt-0.5 tabular-nums" style={{ color: 'var(--liquid-muted)' }}>
-                    {isCurrent ? '上次阅读' : `ID ${ep.photo_id}`}
-                  </div>
-                </button>
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               );
             })}
           </div>
@@ -414,15 +528,66 @@ export function AlbumDetailPage() {
                 isLast={idx === sortedEpisodes.length - 1}
                 onClick={() => navigate(`/read/online/${album.album_id}/${ep.photo_id}`)}
                 right={
-                  <span className="text-[13px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
-                    阅读
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      title="下载本话"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDlTargetPhotoId(ep.photo_id);
+                        setDlTargetLabel(`第 ${ep.index} 话 ${ep.name || ''}`.trim());
+                        setDlSheetOpen(true);
+                      }}
+                      className="w-8 h-8 rounded-full flex items-center justify-center cursor-pointer hover:bg-black/5 dark:hover:bg-white/10"
+                      style={{ color: 'var(--liquid-accent)' }}
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[13px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
+                      阅读
+                    </span>
+                  </div>
                 }
               />
             ))}
           </InsetGroup>
         )}
       </section>
+
+      {albumBookmarks.length > 0 && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Bookmark className="w-4 h-4" style={{ color: 'var(--liquid-accent)' }} />
+            <h2 className="text-[20px] font-semibold tracking-[-0.02em]">我的书签 ({albumBookmarks.length})</h2>
+          </div>
+          <InsetGroup>
+            {albumBookmarks.map((b, idx) => (
+              <InsetRow
+                key={b.bookmark_id}
+                label={`${b.chapter_title || `章节 ${b.photo_id}`} · 第 ${b.page_index + 1} 页`}
+                sublabel={b.note || new Date(b.updated_at).toLocaleString()}
+                isLast={idx === albumBookmarks.length - 1}
+                onClick={() => navigate(`/read/${b.source || 'online'}/${b.album_id}/${b.photo_id}?page=${b.page_index}`)}
+                right={
+                  <button
+                    type="button"
+                    title="移除书签"
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      await api.deleteBookmark(b.bookmark_id);
+                      queryClient.invalidateQueries({ queryKey: ['bookmarks', id] });
+                    }}
+                    className="p-2 cursor-pointer opacity-70 hover:opacity-100"
+                    style={{ color: 'var(--liquid-danger)' }}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                }
+              />
+            ))}
+          </InsetGroup>
+        </section>
+      )}
 
       {/* 内嵌精选评论预览 */}
       <section className="space-y-4">
@@ -475,7 +640,15 @@ export function AlbumDetailPage() {
       )}
 
       {/* 下载格式 Action Sheet */}
-      <BottomSheet open={dlSheetOpen} onClose={() => setDlSheetOpen(false)} title="选择下载格式">
+      <BottomSheet
+        open={dlSheetOpen}
+        onClose={() => {
+          setDlSheetOpen(false);
+          setDlTargetPhotoId(null);
+          setDlTargetLabel('');
+        }}
+        title={dlTargetLabel ? `下载单话：${dlTargetLabel}` : '选择整本下载格式'}
+      >
         <InsetGroup>
           {(
             [
@@ -494,6 +667,70 @@ export function AlbumDetailPage() {
             />
           ))}
         </InsetGroup>
+      </BottomSheet>
+
+      {/* 加入本地书单 Sheet */}
+      <BottomSheet open={shelfSheetOpen} onClose={() => setShelfSheetOpen(false)} title="加入本地书单 / 标签">
+        <div className="space-y-4">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (newShelfName.trim()) createShelfMutation.mutate();
+            }}
+            className="flex items-center gap-2"
+          >
+            <input
+              type="text"
+              value={newShelfName}
+              onChange={(e) => setNewShelfName(e.target.value)}
+              placeholder="新建本地书单名称..."
+              className="flex-1 min-h-[40px] rounded-full px-4 py-1.5 text-[14px] outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-solid)', border: '1px solid var(--liquid-separator)' }}
+            />
+            <button
+              type="submit"
+              disabled={!newShelfName.trim() || createShelfMutation.isPending}
+              className="min-h-[40px] inline-flex items-center gap-1 px-4 py-1.5 rounded-full text-[13.5px] font-semibold text-white cursor-pointer disabled:opacity-50 liquid-tactile"
+              style={{ backgroundColor: 'var(--liquid-scene)' }}
+            >
+              <Plus className="w-4 h-4" /> 新建并加入
+            </button>
+          </form>
+          {shelves.length === 0 ? (
+            <div className="py-6 text-center text-[13px]" style={{ color: 'var(--liquid-muted)' }}>
+              暂无本地书单，在上方输入名称即可创建
+            </div>
+          ) : (
+            <InsetGroup>
+              {shelves.map((s, idx) => {
+                const inShelf = albumShelfIds.includes(s.shelf_id);
+                return (
+                  <InsetRow
+                    key={s.shelf_id}
+                    label={s.name}
+                    sublabel={`${s.item_count} 部作品`}
+                    isLast={idx === shelves.length - 1}
+                    onClick={() => toggleShelfMutation.mutate({ shelfId: s.shelf_id, inShelf })}
+                    right={
+                      inShelf ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[12px] font-semibold"
+                          style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+                        >
+                          <Check className="w-3.5 h-3.5" /> 已加入
+                        </span>
+                      ) : (
+                        <span className="text-[12.5px]" style={{ color: 'var(--liquid-muted)' }}>
+                          加入
+                        </span>
+                      )
+                    }
+                  />
+                );
+              })}
+            </InsetGroup>
+          )}
+        </div>
       </BottomSheet>
 
       {/* 选夹收藏 Sheet */}

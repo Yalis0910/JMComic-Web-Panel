@@ -81,6 +81,8 @@ function QuickSearchModal({ open, onClose }: { open: boolean; onClose: () => voi
     navigate(`/search?q=${encodeURIComponent(clean)}&type=${type}`);
   };
 
+  const directIdMatch = q.trim().match(/^(?:jm)?(\d{4,8})$/i);
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4 bg-black/35 backdrop-blur-xs"
@@ -117,6 +119,20 @@ function QuickSearchModal({ open, onClose }: { open: boolean; onClose: () => voi
           </form>
 
           <div className="pt-3.5 space-y-3.5">
+            {directIdMatch && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  navigate(`/album/${directIdMatch[1]}`);
+                }}
+                className="w-full min-h-[42px] px-4 py-2 rounded-full flex items-center justify-between text-[13.5px] font-semibold text-white cursor-pointer liquid-tactile"
+                style={{ backgroundColor: 'var(--liquid-scene)' }}
+              >
+                <span>直达车号详情：JM{directIdMatch[1]}</span>
+                <span>前往 →</span>
+              </button>
+            )}
             {recentSearches.length > 0 && (
               <div className="space-y-2">
                 <div className="text-[11px] font-medium uppercase tracking-wider" style={{ color: 'var(--liquid-muted)' }}>

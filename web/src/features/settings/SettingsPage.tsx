@@ -1,8 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Eye, EyeOff } from 'lucide-react';
 import { api } from '../../api/client';
-import { useAppStore, type ReaderMode, type ThemeMode } from '../../stores/useAppStore';
+import { useAppStore, type CoverPrivacyMode, type ReaderMode, type ThemeMode } from '../../stores/useAppStore';
 import { InsetGroup, InsetRow, LiquidSwitch, SegmentedControl } from '../../components/liquid/LiquidControls';
+
+const SUPPORTED_PROXY_PROTOCOLS = new Set(['http:', 'https:', 'socks5:', 'socks5h:', 'socks4:']);
+
+function isValidProxyAddress(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  try {
+    const normalized = trimmed.includes('://') ? trimmed : `http://${trimmed}`;
+    const parsed = new URL(normalized);
+    if (!SUPPORTED_PROXY_PROTOCOLS.has(parsed.protocol.toLowerCase())) return false;
+    if (!parsed.hostname) return false;
+    const portNum = Number(parsed.port);
+    return Number.isInteger(portNum) && portNum >= 1 && portNum <= 65535;
+  } catch {
+    return false;
+  }
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient();
@@ -17,8 +35,12 @@ export function SettingsPage() {
     setFitWidth,
     showThumbStrip,
     setShowThumbStrip,
-    showCovers,
-    setShowCovers,
+    coverPrivacyMode,
+    setCoverPrivacyMode,
+    doublePageRtl,
+    setDoublePageRtl,
+    doublePageCoverOffset,
+    setDoublePageCoverOffset,
     showToast,
   } = useAppStore();
 
@@ -27,7 +49,7 @@ export function SettingsPage() {
     queryFn: api.getSettings,
   });
 
-  const { data: domains } = useQuery({
+  const { data: domains, refetch: refetchDomains, isFetching: domainsFetching } = useQuery({
     queryKey: ['domains'],
     queryFn: api.getDomains,
   });
@@ -36,9 +58,18 @@ export function SettingsPage() {
   const [downloadDir, setDownloadDir] = useState('');
   const [dirRule, setDirRule] = useState('');
   const [threadCount, setThreadCount] = useState(4);
+  const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(2);
   const [cacheDir, setCacheDir] = useState('');
   const [cacheMaxFiles, setCacheMaxFiles] = useState(5000);
   const [cacheMaxMb, setCacheMaxMb] = useState(2048);
+
+  const [proxyEnabled, setProxyEnabled] = useState(false);
+  const [proxyUrl, setProxyUrl] = useState('');
+  const [proxyUsername, setProxyUsername] = useState('');
+  const [proxyPassword, setProxyPassword] = useState('');
+  const [showProxyPassword, setShowProxyPassword] = useState(false);
+  const [proxyTestMsg, setProxyTestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [retryTimes, setRetryTimes] = useState(5);
 
   const [pinEnabled, setPinEnabled] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -50,10 +81,27 @@ export function SettingsPage() {
     setDownloadDir(p.download_dir || '');
     setDirRule(p.dir_rule || 'Bd_Aauthor_Atitle');
     setThreadCount(Number(p.image_thread_count || 4));
+    setMaxConcurrentDownloads(Number(p.max_concurrent_downloads || 2));
     setCacheDir(p.image_cache_dir || '');
     setCacheMaxFiles(Number(p.image_cache_max_files || 5000));
     setCacheMaxMb(Number(p.image_cache_max_size_mb || 2048));
     setPinEnabled(Boolean(p.pin_enabled));
+
+    const opt = settingsData.option || {};
+    const optProxies = opt?.client?.postman?.meta_data?.proxies;
+    const fallbackProxy =
+      typeof optProxies === 'string'
+        ? optProxies
+        : optProxies && typeof optProxies === 'object'
+          ? optProxies.https || optProxies.http || ''
+          : '';
+    setProxyUrl(p.proxy_url || fallbackProxy || '');
+    setProxyUsername(p.proxy_username || '');
+    setProxyPassword(p.proxy_password || '');
+    setProxyEnabled(
+      typeof p.proxy_enabled === 'boolean' ? p.proxy_enabled : Boolean(fallbackProxy),
+    );
+    setRetryTimes(Number(opt?.client?.retry_times ?? 5));
   }, [settingsData]);
 
   const saveServerMutation = useMutation({
@@ -63,6 +111,7 @@ export function SettingsPage() {
         download_dir: downloadDir,
         dir_rule: dirRule,
         image_thread_count: threadCount,
+        max_concurrent_downloads: maxConcurrentDownloads,
         image_cache_dir: cacheDir,
         image_cache_max_files: cacheMaxFiles,
         image_cache_max_size_mb: cacheMaxMb,
@@ -72,6 +121,73 @@ export function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
     onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const proxyConfigReady = isValidProxyAddress(proxyUrl);
+
+  const saveNetworkConfig = async (nextEnabled: boolean) => {
+    const cleanProxy = proxyUrl.trim();
+    const cleanUser = proxyUsername.trim();
+    if (nextEnabled && !isValidProxyAddress(cleanProxy)) {
+      throw new Error('请先填写完整有效的代理地址与端口后再开启');
+    }
+    const res = await api.updateSettings({
+      proxy_enabled: nextEnabled && Boolean(cleanProxy),
+      proxy_url: cleanProxy,
+      proxy_username: cleanUser,
+      proxy_password: proxyPassword,
+    });
+    if (!res?.panel || !('proxy_url' in res.panel)) {
+      throw new Error('当前后端进程仍是旧版本，请先重启后端服务后再保存代理设置');
+    }
+    await api.updateOption({
+      client: {
+        retry_times: Math.max(0, Math.min(10, Number(retryTimes) || 0)),
+      },
+    });
+  };
+
+  const saveOptionMutation = useMutation({
+    mutationFn: () => saveNetworkConfig(proxyConfigReady ? proxyEnabled : false),
+    onSuccess: () => {
+      if (!proxyConfigReady && proxyEnabled) {
+        setProxyEnabled(false);
+      }
+      showToast('网络与代理配置已保存并同步至 option.yml', 'success');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const toggleProxyMutation = useMutation({
+    mutationFn: (enabled: boolean) => saveNetworkConfig(enabled),
+    onSuccess: (_, enabled) => {
+      setProxyEnabled(enabled);
+      showToast(enabled ? '已开启代理并立即生效' : '已关闭代理，当前使用直连', 'success');
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const testProxyMutation = useMutation({
+    mutationFn: () => {
+      if (!proxyConfigReady) {
+        throw new Error('请先填写完整有效的代理地址与端口后再测试');
+      }
+      return api.testProxy({
+        proxy_url: proxyUrl.trim(),
+        proxy_username: proxyUsername.trim(),
+        proxy_password: proxyPassword,
+      });
+    },
+    onSuccess: (res) => {
+      setProxyTestMsg({ ok: Boolean(res.reachable), text: res.message });
+      showToast(res.message, res.reachable ? 'success' : 'error');
+    },
+    onError: (err: Error) => {
+      setProxyTestMsg({ ok: false, text: err.message });
+      showToast(err.message, 'error');
+    },
   });
 
   const clearCacheMutation = useMutation({
@@ -145,9 +261,28 @@ export function SettingsPage() {
           right={<LiquidSwitch checked={showThumbStrip} onChange={setShowThumbStrip} />}
         />
         <InsetRow
-          label="显示漫画封面"
-          sublabel="关闭后将隐藏列表、详情与历史中的封面图片"
-          right={<LiquidSwitch checked={showCovers} onChange={setShowCovers} />}
+          label="封面隐私模式"
+          sublabel="模糊模式支持点击封面临时预览"
+          right={
+            <SegmentedControl<CoverPrivacyMode>
+              value={coverPrivacyMode || 'show'}
+              onChange={setCoverPrivacyMode}
+              options={[
+                { value: 'show', label: '显示' },
+                { value: 'blur', label: '模糊' },
+                { value: 'hide', label: '隐藏' },
+              ]}
+            />
+          }
+        />
+        <InsetRow
+          label="双页日漫方向 (右→左)"
+          right={<LiquidSwitch checked={doublePageRtl} onChange={setDoublePageRtl} />}
+        />
+        <InsetRow
+          label="双页封面单独成页"
+          sublabel="防止跨页拆错偶/奇数页"
+          right={<LiquidSwitch checked={doublePageCoverOffset} onChange={setDoublePageCoverOffset} />}
         />
         <InsetRow
           label="预加载页数"
@@ -214,6 +349,21 @@ export function SettingsPage() {
               max={16}
               value={threadCount}
               onChange={(e) => setThreadCount(Number(e.target.value))}
+              className="w-20 rounded-full px-3 py-1.5 text-right text-[14px] tabular-nums outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
+            />
+          }
+        />
+        <InsetRow
+          label="下载队列最大并行任务数"
+          sublabel="超出部分将进入排队等待"
+          right={
+            <input
+              type="number"
+              min={1}
+              max={5}
+              value={maxConcurrentDownloads}
+              onChange={(e) => setMaxConcurrentDownloads(Number(e.target.value))}
               className="w-20 rounded-full px-3 py-1.5 text-right text-[14px] tabular-nums outline-none liquid-focus-ring"
               style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
             />
@@ -304,10 +454,168 @@ export function SettingsPage() {
         </div>
       </InsetGroup>
 
+      <InsetGroup
+        title="网络与代理配置 (option.yml)"
+        footer="填写完整代理地址与端口后才能开启开关；开启后经代理访问，关闭则恢复直连并保留已填配置。支持 http://127.0.0.1:7890、socks5://127.0.0.1:7891 或 http://用户名:密码@代理IP:端口。"
+      >
+        <InsetRow
+          label="启用服务端代理"
+          sublabel={
+            proxyEnabled && proxyConfigReady
+              ? `已开启：${proxyUrl.trim()}`
+              : proxyConfigReady
+                ? '已关闭（当前直连，开启后走上方所填代理）'
+                : '请先填写有效代理地址与端口后方可开启'
+          }
+          right={
+            <LiquidSwitch
+              checked={proxyEnabled}
+              disabled={(!proxyConfigReady && !proxyEnabled) || toggleProxyMutation.isPending}
+              onChange={(next) => {
+                if (next && !proxyConfigReady) {
+                  showToast('请先填写完整有效的代理地址与端口后再开启', 'error');
+                  return;
+                }
+                toggleProxyMutation.mutate(next);
+              }}
+            />
+          }
+        />
+        <InsetRow
+          label="HTTP / SOCKS 代理地址"
+          right={
+            <input
+              type="text"
+              value={proxyUrl}
+              onChange={(e) => {
+                const val = e.target.value;
+                setProxyUrl(val);
+                setProxyTestMsg(null);
+                if (!isValidProxyAddress(val) && proxyEnabled) {
+                  setProxyEnabled(false);
+                }
+              }}
+              placeholder="http://127.0.0.1:7890"
+              className="w-48 sm:w-72 rounded-full px-3.5 py-1.5 text-[13.5px] outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
+            />
+          }
+        />
+        <InsetRow
+          label="代理用户名（可选）"
+          right={
+            <input
+              type="text"
+              value={proxyUsername}
+              onChange={(e) => {
+                setProxyUsername(e.target.value);
+                setProxyTestMsg(null);
+              }}
+              placeholder="无认证可留空"
+              autoComplete="off"
+              className="w-48 sm:w-72 rounded-full px-3.5 py-1.5 text-[13.5px] outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
+            />
+          }
+        />
+        <InsetRow
+          label="代理密码（可选）"
+          sublabel="单独填写可自动转义 @、: 等特殊字符"
+          right={
+            <div className="flex items-center gap-1.5">
+              <input
+                type={showProxyPassword ? 'text' : 'password'}
+                value={proxyPassword}
+                onChange={(e) => {
+                  setProxyPassword(e.target.value);
+                  setProxyTestMsg(null);
+                }}
+                placeholder="无认证可留空"
+                autoComplete="new-password"
+                className="w-40 sm:w-64 rounded-full px-3.5 py-1.5 text-[13.5px] outline-none liquid-focus-ring"
+                style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
+              />
+              <button
+                type="button"
+                aria-label={showProxyPassword ? '隐藏代理密码' : '显示代理密码'}
+                onClick={() => setShowProxyPassword((v) => !v)}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full cursor-pointer liquid-tactile"
+                style={{ backgroundColor: 'var(--liquid-fill-soft)', color: 'var(--liquid-muted)' }}
+              >
+                {showProxyPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          }
+        />
+        <InsetRow
+          label="请求重试次数"
+          right={
+            <input
+              type="number"
+              min={0}
+              max={10}
+              value={retryTimes}
+              onChange={(e) => setRetryTimes(Number(e.target.value))}
+              className="w-20 rounded-full px-3 py-1.5 text-right text-[14px] tabular-nums outline-none liquid-focus-ring"
+              style={{ backgroundColor: 'var(--liquid-fill-soft)' }}
+            />
+          }
+        />
+        <InsetRow
+          label="测试代理连通性"
+          sublabel={
+            proxyTestMsg
+              ? proxyTestMsg.text
+              : '验证所填代理能否经服务端访问禁漫接口'
+          }
+          onClick={() => {
+            if (!testProxyMutation.isPending) {
+              testProxyMutation.mutate();
+            }
+          }}
+          right={
+            <span
+              className="text-[14px] font-semibold"
+              style={{
+                color: !proxyConfigReady
+                  ? 'var(--liquid-muted)'
+                  : proxyTestMsg
+                    ? proxyTestMsg.ok
+                      ? 'var(--liquid-accent)'
+                      : 'var(--liquid-danger)'
+                    : 'var(--liquid-accent)',
+              }}
+            >
+              {testProxyMutation.isPending ? '测试中...' : '测试连通'}
+            </span>
+          }
+        />
+        <InsetRow
+          label="保存网络与代理配置"
+          isLast
+          onClick={() => saveOptionMutation.mutate()}
+          right={
+            <span className="text-[14px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
+              {saveOptionMutation.isPending ? '保存中...' : '保存'}
+            </span>
+          }
+        />
+      </InsetGroup>
+
       {domains && (
         <InsetGroup title="当前生效域名">
           <InsetRow label="APP API 域名" sublabel={domains.api_domains.join(', ')} />
-          <InsetRow label="HTML 域名" sublabel={domains.html_domains.join(', ')} isLast />
+          <InsetRow label="HTML 域名" sublabel={domains.html_domains.join(', ')} />
+          <InsetRow
+            label="重新获取最新可用域名"
+            isLast
+            onClick={() => refetchDomains()}
+            right={
+              <span className="text-[13.5px] font-semibold" style={{ color: 'var(--liquid-accent)' }}>
+                {domainsFetching ? '检测中...' : '刷新'}
+              </span>
+            }
+          />
         </InsetGroup>
       )}
     </div>

@@ -1,9 +1,12 @@
 import asyncio
+from collections import deque
+import json
 import logging
+from pathlib import Path
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Deque, Dict, List, Optional, Set
 
 from jmcomic import download_album, download_photo
 from jmcomic.jm_option import JmModuleConfig
@@ -48,11 +51,73 @@ class DownloadManager:
     def __init__(self) -> None:
         self.repo = DownloadRepository()
         self._lock = threading.RLock()
+        self._cond = threading.Condition(self._lock)
         self._tasks: Dict[str, Dict[str, Any]] = {}
+        self._queue: Deque[str] = deque()
+        self._active_workers: int = 0
+        self._dispatcher_started: bool = False
         self._stop_events: Dict[str, threading.Event] = {}
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._subscribers: Set[asyncio.Queue] = set()
         self._last_persist_at: Dict[str, float] = {}
+
+    def _ensure_dispatcher(self) -> None:
+        with self._lock:
+            if self._dispatcher_started:
+                return
+            self._dispatcher_started = True
+            t = threading.Thread(
+                target=self._dispatcher_loop,
+                daemon=True,
+                name="dl-dispatcher",
+            )
+            t.start()
+
+    def _dispatcher_loop(self) -> None:
+        while True:
+            task_tuple = None
+            with self._cond:
+                while True:
+                    max_conc = max(1, int(config_manager.get_settings().max_concurrent_downloads))
+                    while self._queue and self._active_workers < max_conc:
+                        tid = self._queue.popleft()
+                        t = self._tasks.get(tid)
+                        if not t or t.get("status") != "pending":
+                            continue
+                        t["status"] = "running"
+                        t["updated_at"] = time.time()
+                        snap = dict(t)
+                        self._active_workers += 1
+                        task_tuple = (
+                            tid,
+                            str(t["album_id"]),
+                            str(t["download_type"]),
+                            str(t["photo_id"]) if t.get("photo_id") else None,
+                            snap,
+                        )
+                        break
+                    if task_tuple is not None:
+                        break
+                    self._cond.wait(timeout=1.0)
+
+            tid, album_id, dl_type, photo_id, snap = task_tuple
+            self._persist_async(snap)
+            self._broadcast("task_update", snap)
+            worker = threading.Thread(
+                target=self._worker_wrapper,
+                args=(tid, album_id, dl_type, photo_id),
+                daemon=True,
+                name=f"dl-{tid}",
+            )
+            worker.start()
+
+    def _worker_wrapper(self, task_id: str, album_id: str, download_type: str, photo_id: Optional[str]) -> None:
+        try:
+            self._worker_run(task_id, album_id, download_type, photo_id)
+        finally:
+            with self._cond:
+                self._active_workers = max(0, self._active_workers - 1)
+                self._cond.notify_all()
 
     async def startup(self) -> None:
         self._loop = asyncio.get_running_loop()
@@ -61,6 +126,7 @@ class DownloadManager:
         with self._lock:
             for r in rows:
                 self._tasks[r["task_id"]] = r
+        self._ensure_dispatcher()
 
     def subscribe(self) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=64)
@@ -112,6 +178,10 @@ class DownloadManager:
         if download_type not in ("folder", "zip", "pdf", "long_img"):
             raise ValueError("download_type 必须是 folder/zip/pdf/long_img")
 
+        if self._loop is None:
+            self._loop = asyncio.get_running_loop()
+        self._ensure_dispatcher()
+
         now = time.time()
         task_id = uuid.uuid4().hex[:12]
         task = {
@@ -119,7 +189,7 @@ class DownloadManager:
             "album_id": str(album_id),
             "photo_id": str(photo_id) if photo_id else None,
             "title": "",
-            "status": "running",
+            "status": "pending",
             "download_type": download_type,
             "progress": 0,
             "completed_count": 0,
@@ -131,23 +201,38 @@ class DownloadManager:
             "created_at": now,
             "updated_at": now,
         }
-        with self._lock:
+        with self._cond:
             self._tasks[task_id] = task
             self._stop_events[task_id] = threading.Event()
+            self._queue.append(task_id)
+            self._cond.notify_all()
         await self.repo.upsert_task(task)
         self._broadcast("task_update", task)
-
-        t = threading.Thread(
-            target=self._worker_run,
-            args=(task_id, str(album_id), download_type, str(photo_id) if photo_id else None),
-            daemon=True,
-            name=f"dl-{task_id}",
-        )
-        t.start()
         return task
 
+    async def retry_task(self, task_id: str) -> Dict[str, Any]:
+        self._ensure_dispatcher()
+        with self._cond:
+            task = self._tasks.get(task_id)
+            if not task:
+                raise KeyError("任务不存在")
+            if task["status"] in ("running", "pending"):
+                return dict(task)
+            task["status"] = "pending"
+            task["progress"] = 0
+            task["completed_count"] = 0
+            task["error"] = None
+            task["updated_at"] = time.time()
+            self._stop_events[task_id] = threading.Event()
+            self._queue.append(task_id)
+            snap = dict(task)
+            self._cond.notify_all()
+        await self.repo.upsert_task(snap)
+        self._broadcast("task_update", snap)
+        return snap
+
     async def cancel_task(self, task_id: str) -> None:
-        with self._lock:
+        with self._cond:
             ev = self._stop_events.get(task_id)
             if ev:
                 ev.set()
@@ -155,9 +240,13 @@ class DownloadManager:
             if task and task["status"] in ("running", "pending"):
                 task["status"] = "cancelled"
                 task["updated_at"] = time.time()
-        if task:
-            await self.repo.upsert_task(task)
-            self._broadcast("task_update", task)
+                snap = dict(task)
+            else:
+                snap = None
+            self._cond.notify_all()
+        if snap:
+            await self.repo.upsert_task(snap)
+            self._broadcast("task_update", snap)
 
     async def delete_task(self, task_id: str) -> None:
         await self.cancel_task(task_id)
@@ -169,7 +258,10 @@ class DownloadManager:
 
     async def clear_finished(self) -> None:
         with self._lock:
-            to_del = [tid for tid, t in self._tasks.items() if t["status"] != "running"]
+            to_del = [
+                tid for tid, t in self._tasks.items()
+                if t["status"] not in ("running", "pending")
+            ]
             for tid in to_del:
                 self._tasks.pop(tid, None)
         await self.repo.clear_finished()
@@ -248,20 +340,55 @@ class DownloadManager:
             self._last_persist_at[task_id] = now
             self._persist_async(snapshot)
 
+    def _write_album_metadata(self, target_dir: Path, meta: Dict[str, Any]) -> None:
+        try:
+            if target_dir.exists() and target_dir.is_dir():
+                (target_dir / ".jmlis-meta.json").write_text(
+                    json.dumps(meta, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+        except OSError as exc:
+            logger.debug("写入 .jmlis-meta.json 失败: %s", exc)
+
     def _worker_run(self, task_id: str, album_id: str, download_type: str, photo_id: Optional[str]) -> None:
         try:
+            stop_ev = self.get_stop_event(task_id)
+            if stop_ev and stop_ev.is_set():
+                return
+
             option = self._build_option(download_type, is_single_photo=bool(photo_id))
             client = option.new_jm_client()
+            meta_payload: Dict[str, Any] = {"album_id": str(album_id)}
+            album_obj = None
+
             if photo_id:
                 photo = client.get_photo_detail(photo_id, fetch_album=True)
                 total_pages = len(photo)
-                title = photo.from_album.name if photo.from_album else photo.name
+                album_obj = getattr(photo, "from_album", None)
+                title = album_obj.name if album_obj else photo.name
+                meta_payload.update(
+                    {
+                        "title": title,
+                        "author": ", ".join(getattr(album_obj, "authors", []) or []) if album_obj else "",
+                        "tags": list(getattr(album_obj, "tags", []) or []) if album_obj else [],
+                    }
+                )
             else:
-                album = client.get_album_detail(album_id)
-                total_pages = int(album.page_count or 0)
+                album_obj = client.get_album_detail(album_id)
+                total_pages = int(album_obj.page_count or 0)
                 if total_pages <= 0:
-                    total_pages = sum(len(client.get_photo_detail(ep[0], fetch_album=False)) for ep in album.episode_list)
-                title = album.name
+                    total_pages = sum(
+                        len(client.get_photo_detail(ep[0], fetch_album=False))
+                        for ep in album_obj.episode_list
+                    )
+                title = album_obj.name
+                meta_payload.update(
+                    {
+                        "title": title,
+                        "author": ", ".join(getattr(album_obj, "authors", []) or []),
+                        "tags": list(getattr(album_obj, "tags", []) or []),
+                    }
+                )
 
             with self._lock:
                 task = self._tasks.get(task_id)
@@ -285,6 +412,12 @@ class DownloadManager:
             )
 
             def _done_cb(*_args):
+                if download_type == "folder" and album_obj is not None:
+                    try:
+                        root_dir = Path(option.dir_rule.decide_album_root_dir(album_obj))
+                        self._write_album_metadata(root_dir, meta_payload)
+                    except Exception:
+                        pass
                 with self._lock:
                     t = self._tasks.get(task_id)
                     if t and t["status"] != "cancelled":
@@ -300,9 +433,9 @@ class DownloadManager:
                     asyncio.run_coroutine_threadsafe(library_service.scan(), self._loop)
 
             if photo_id:
-                download_photo(photo_id, option, callback=_done_cb, check_exception=False)
+                download_photo(photo_id, option, callback=_done_cb, check_exception=True)
             else:
-                download_album(album_id, option, callback=_done_cb, check_exception=False)
+                download_album(album_id, option, callback=_done_cb, check_exception=True)
 
         except Exception as exc:
             with self._lock:

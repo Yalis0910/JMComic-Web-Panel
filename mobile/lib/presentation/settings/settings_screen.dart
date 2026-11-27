@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/network/app_proxy.dart';
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
@@ -18,6 +19,11 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late TextEditingController _urlCtrl;
   late TextEditingController _tokenCtrl;
+  late TextEditingController _proxyUrlCtrl;
+  late TextEditingController _proxyUserCtrl;
+  late TextEditingController _proxyPassCtrl;
+  bool _obscureProxyPass = true;
+  bool _testingProxy = false;
   bool _checkingIn = false;
 
   @override
@@ -26,12 +32,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final s = ref.read(hybridControllerProvider).settings;
     _urlCtrl = TextEditingController(text: s.serverUrl);
     _tokenCtrl = TextEditingController(text: s.panelToken);
+    _proxyUrlCtrl = TextEditingController(text: s.proxyUrl);
+    _proxyUserCtrl = TextEditingController(text: s.proxyUsername);
+    _proxyPassCtrl = TextEditingController(text: s.proxyPassword);
   }
 
   @override
   void dispose() {
     _urlCtrl.dispose();
     _tokenCtrl.dispose();
+    _proxyUrlCtrl.dispose();
+    _proxyUserCtrl.dispose();
+    _proxyPassCtrl.dispose();
     super.dispose();
   }
 
@@ -84,6 +96,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final state = ref.watch(hybridControllerProvider);
     final ctrl = ref.read(hybridControllerProvider.notifier);
     final acc = state.account;
+
+    ref.listen<HybridSettings>(
+      hybridControllerProvider.select((s) => s.settings),
+      (prev, next) {
+        if (prev?.serverUrl != next.serverUrl && _urlCtrl.text.isEmpty) {
+          _urlCtrl.text = next.serverUrl;
+        }
+        if (prev?.panelToken != next.panelToken && _tokenCtrl.text.isEmpty) {
+          _tokenCtrl.text = next.panelToken;
+        }
+        if (prev?.proxyUrl != next.proxyUrl && _proxyUrlCtrl.text.isEmpty) {
+          _proxyUrlCtrl.text = next.proxyUrl;
+        }
+        if (prev?.proxyUsername != next.proxyUsername && _proxyUserCtrl.text.isEmpty) {
+          _proxyUserCtrl.text = next.proxyUsername;
+        }
+        if (prev?.proxyPassword != next.proxyPassword && _proxyPassCtrl.text.isEmpty) {
+          _proxyPassCtrl.text = next.proxyPassword;
+        }
+      },
+    );
 
     return CupertinoPageScaffold(
       backgroundColor: LiquidTokens.canvas(context),
@@ -348,20 +381,275 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         Container(height: 0.7, color: LiquidTokens.separator(context)),
                         CupertinoListTile(
                           title: Text(
-                            '保存并探测连接',
+                            state.probing ? '正在探测连接...' : '保存并探测连接',
                             style: TextStyle(
                               color: LiquidTokens.accentStrong(context),
                               fontWeight: FontWeight.w600,
                             ),
                           ),
-                          onTap: () => ctrl.updateSettings(
-                            state.settings.copyWith(
-                              serverUrl: _urlCtrl.text.trim(),
-                              panelToken: _tokenCtrl.text.trim(),
-                            ),
-                          ),
+                          onTap: () async {
+                            await ctrl.updateSettings(
+                              state.settings.copyWith(
+                                serverUrl: _urlCtrl.text.trim(),
+                                panelToken: _tokenCtrl.text.trim(),
+                              ),
+                            );
+                            final probe = await ctrl.probeAndSwitch();
+                            if (mounted) {
+                              showCupertinoDialog(
+                                context: context,
+                                builder: (ctx) => CupertinoAlertDialog(
+                                  title: Text(probe.lanReachable ? '连接成功' : '探测结果'),
+                                  content: Text(probe.message),
+                                  actions: [
+                                    CupertinoDialogAction(
+                                      child: const Text('好'),
+                                      onPressed: () => Navigator.pop(ctx),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                          },
                         ),
                       ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12, bottom: 8),
+                    child: Text(
+                      'App 网络代理（直连模式）',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: LiquidTokens.muted(context)),
+                    ),
+                  ),
+                  ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _proxyUrlCtrl,
+                    builder: (context, proxyVal, _) {
+                      final parsedProxy = parseProxyConfig(
+                        proxyVal.text,
+                        username: _proxyUserCtrl.text,
+                        password: _proxyPassCtrl.text,
+                      );
+                      final proxyReady = parsedProxy != null;
+                      final switchChecked = state.settings.proxyEnabled && proxyReady;
+                      return LiquidSolidCard(
+                        padding: EdgeInsets.zero,
+                        child: Column(
+                          children: [
+                            CupertinoListTile(
+                              title: const Text('启用 App 代理'),
+                              subtitle: Text(
+                                state.settings.proxyEnabled && parsedProxy != null
+                                    ? '已开启：${parsedProxy.scheme}://${parsedProxy.host}:${parsedProxy.port}（内网自动直连）'
+                                    : proxyReady
+                                        ? '已关闭（当前直连，已填代理配置已保留）'
+                                        : '请先填写完整代理地址与端口后再开启',
+                              ),
+                              onTap: proxyReady
+                                  ? null
+                                  : () {
+                                      showCupertinoDialog(
+                                        context: context,
+                                        builder: (ctx) => CupertinoAlertDialog(
+                                          title: const Text('未填写完整配置'),
+                                          content: const Text(
+                                            '请先填写完整有效的代理地址与端口（如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891）后再开启代理开关。',
+                                          ),
+                                          actions: [
+                                            CupertinoDialogAction(
+                                              child: const Text('好'),
+                                              onPressed: () => Navigator.pop(ctx),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                              trailing: CupertinoSwitch(
+                                value: switchChecked,
+                                onChanged: !proxyReady
+                                    ? null
+                                    : (nextEnabled) async {
+                                        await ctrl.updateSettings(
+                                          state.settings.copyWith(
+                                            proxyEnabled: nextEnabled,
+                                            proxyUrl: _proxyUrlCtrl.text.trim(),
+                                            proxyUsername: _proxyUserCtrl.text.trim(),
+                                            proxyPassword: _proxyPassCtrl.text,
+                                          ),
+                                        );
+                                      },
+                              ),
+                            ),
+                            Container(height: 0.7, color: LiquidTokens.separator(context)),
+                            CupertinoTextFormFieldRow(
+                              prefix: const Text('代理地址'),
+                              controller: _proxyUrlCtrl,
+                              placeholder: 'http://127.0.0.1:7890',
+                              keyboardType: TextInputType.url,
+                              autocorrect: false,
+                            ),
+                            Container(height: 0.7, color: LiquidTokens.separator(context)),
+                            CupertinoTextFormFieldRow(
+                              prefix: const Text('用户名'),
+                              controller: _proxyUserCtrl,
+                              placeholder: '可选（无认证留空）',
+                              autocorrect: false,
+                            ),
+                            Container(height: 0.7, color: LiquidTokens.separator(context)),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: CupertinoTextFormFieldRow(
+                                    prefix: const Text('密码'),
+                                    controller: _proxyPassCtrl,
+                                    obscureText: _obscureProxyPass,
+                                    placeholder: '可选（自动处理特殊字符）',
+                                    autocorrect: false,
+                                  ),
+                                ),
+                                CupertinoButton(
+                                  padding: const EdgeInsets.only(right: 12),
+                                  minimumSize: const Size(32, 32),
+                                  onPressed: () => setState(() => _obscureProxyPass = !_obscureProxyPass),
+                                  child: Icon(
+                                    _obscureProxyPass ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                                    size: 18,
+                                    color: LiquidTokens.muted(context),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Container(height: 0.7, color: LiquidTokens.separator(context)),
+                            CupertinoListTile(
+                              title: Text(
+                                _testingProxy ? '正在测试代理连通性...' : '测试代理连通',
+                                style: TextStyle(
+                                  color: proxyReady
+                                      ? LiquidTokens.accentStrong(context)
+                                      : LiquidTokens.muted(context),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              trailing: _testingProxy ? const CupertinoActivityIndicator() : null,
+                              onTap: _testingProxy
+                                  ? null
+                                  : () async {
+                                      final parsed = parseProxyConfig(
+                                        _proxyUrlCtrl.text,
+                                        username: _proxyUserCtrl.text,
+                                        password: _proxyPassCtrl.text,
+                                      );
+                                      if (parsed == null) {
+                                        showCupertinoDialog(
+                                          context: this.context,
+                                          builder: (ctx) => CupertinoAlertDialog(
+                                            title: const Text('无法测试'),
+                                            content: const Text(
+                                              '请先填写完整有效的代理地址与端口（如 http://127.0.0.1:7890 或 socks5://127.0.0.1:7891）后再测试。',
+                                            ),
+                                            actions: [
+                                              CupertinoDialogAction(
+                                                child: const Text('好'),
+                                                onPressed: () => Navigator.pop(ctx),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                        return;
+                                      }
+                                      setState(() => _testingProxy = true);
+                                      final res = await AppProxyManager.instance.probeProxy(parsed);
+                                      if (!mounted) return;
+                                      setState(() => _testingProxy = false);
+                                      showCupertinoDialog(
+                                        context: this.context,
+                                        builder: (ctx) => CupertinoAlertDialog(
+                                          title: Text(res.reachable ? '测试通过' : '连通失败'),
+                                          content: Text(res.message),
+                                          actions: [
+                                            CupertinoDialogAction(
+                                              child: const Text('好'),
+                                              onPressed: () => Navigator.pop(ctx),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                            ),
+                            Container(height: 0.7, color: LiquidTokens.separator(context)),
+                            CupertinoListTile(
+                              title: Text(
+                                '保存代理配置',
+                                style: TextStyle(
+                                  color: LiquidTokens.accentStrong(context),
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              onTap: () async {
+                                final rawUrl = _proxyUrlCtrl.text.trim();
+                                final parsed = parseProxyConfig(
+                                  rawUrl,
+                                  username: _proxyUserCtrl.text,
+                                  password: _proxyPassCtrl.text,
+                                );
+                                if (rawUrl.isNotEmpty && parsed == null) {
+                                  showCupertinoDialog(
+                                    context: context,
+                                    builder: (ctx) => CupertinoAlertDialog(
+                                      title: const Text('代理地址格式无效'),
+                                      content: const Text(
+                                        '请使用 http://IP:端口 或 socks5://IP:端口（需包含 1-65535 有效端口），或 http://用户名:密码@代理IP:端口。',
+                                      ),
+                                      actions: [
+                                        CupertinoDialogAction(
+                                          child: const Text('好'),
+                                          onPressed: () => Navigator.pop(ctx),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                  return;
+                                }
+                                final nextEnabled = parsed != null && state.settings.proxyEnabled;
+                                await ctrl.updateSettings(
+                                  state.settings.copyWith(
+                                    proxyEnabled: nextEnabled,
+                                    proxyUrl: rawUrl,
+                                    proxyUsername: _proxyUserCtrl.text.trim(),
+                                    proxyPassword: _proxyPassCtrl.text,
+                                  ),
+                                );
+                                if (!mounted) return;
+                                showCupertinoDialog(
+                                  context: this.context,
+                                  builder: (ctx) => CupertinoAlertDialog(
+                                    title: const Text('代理配置已保存'),
+                                    content: Text(
+                                      nextEnabled && parsed != null
+                                          ? '已启用代理：${parsed.scheme}://${parsed.host}:${parsed.port}'
+                                          : '配置已保存；当前代理开关为关闭状态（仍走直连）。',
+                                    ),
+                                    actions: [
+                                      CupertinoDialogAction(
+                                        child: const Text('好'),
+                                        onPressed: () => Navigator.pop(ctx),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                    child: Text(
+                      '支持 HTTP（含 Basic/Digest 账密认证）与 SOCKS5 代理，也支持直接粘贴 http://用户名:密码@代理IP:端口；关闭开关将恢复直连并保留配置。LAN 服务端与内网地址自动直连。',
+                      style: TextStyle(fontSize: 11.5, height: 1.45, color: LiquidTokens.muted(context)),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -376,22 +664,69 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     padding: EdgeInsets.zero,
                     child: Column(
                       children: [
-                        CupertinoListTile(
-                          title: const Text('深色模式'),
-                          trailing: CupertinoSwitch(
-                            activeTrackColor: LiquidTokens.accent(context),
-                            value: state.settings.darkMode,
-                            onChanged: (v) => ctrl.updateSettings(state.settings.copyWith(darkMode: v)),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('外观主题', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 8),
+                              LiquidSegmentedPill<AppThemeMode>(
+                                value: state.settings.themeMode,
+                                items: const [
+                                  (value: AppThemeMode.system, label: '跟随系统'),
+                                  (value: AppThemeMode.light, label: '浅色'),
+                                  (value: AppThemeMode.dark, label: '深色'),
+                                ],
+                                onChanged: (m) => ctrl.updateSettings(state.settings.copyWith(themeMode: m)),
+                              ),
+                            ],
                           ),
                         ),
                         Container(height: 0.7, color: LiquidTokens.separator(context)),
-                        CupertinoListTile(
-                          title: const Text('显示漫画封面'),
-                          subtitle: const Text('关闭后将隐藏列表、详情与历史中的封面图'),
-                          trailing: CupertinoSwitch(
-                            activeTrackColor: LiquidTokens.accent(context),
-                            value: state.settings.showCovers,
-                            onChanged: (v) => ctrl.updateSettings(state.settings.copyWith(showCovers: v)),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('封面隐私模式', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 2),
+                              Text(
+                                '模糊模式支持点击封面临时预览',
+                                style: TextStyle(fontSize: 12, color: LiquidTokens.muted(context)),
+                              ),
+                              const SizedBox(height: 8),
+                              LiquidSegmentedPill<CoverPrivacyMode>(
+                                value: state.settings.coverPrivacyMode,
+                                items: const [
+                                  (value: CoverPrivacyMode.show, label: '显示'),
+                                  (value: CoverPrivacyMode.blur, label: '模糊'),
+                                  (value: CoverPrivacyMode.hide, label: '隐藏'),
+                                ],
+                                onChanged: (p) => ctrl.updateSettings(state.settings.copyWith(coverPrivacyMode: p)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(height: 0.7, color: LiquidTokens.separator(context)),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('默认阅读模式', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+                              const SizedBox(height: 8),
+                              LiquidSegmentedPill<MobileReaderMode>(
+                                value: state.settings.readerMode,
+                                items: const [
+                                  (value: MobileReaderMode.vertical, label: '条漫'),
+                                  (value: MobileReaderMode.singleLtr, label: '左→右'),
+                                  (value: MobileReaderMode.singleRtl, label: '日漫'),
+                                  (value: MobileReaderMode.doublePage, label: '双页'),
+                                ],
+                                onChanged: (rm) => ctrl.updateSettings(state.settings.copyWith(readerMode: rm)),
+                              ),
+                            ],
                           ),
                         ),
                         Container(height: 0.7, color: LiquidTokens.separator(context)),
@@ -437,7 +772,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Image.asset('assets/icon/app_icon.png', width: 28, height: 28),
                           ),
                           title: const Text('JMlis'),
-                          subtitle: const Text('v2.0.3 · Liquid Glass 跨平台漫画阅读器'),
+                          subtitle: const Text('v2.1.0 · Liquid Glass 跨平台漫画阅读器'),
                         ),
                       ],
                     ),

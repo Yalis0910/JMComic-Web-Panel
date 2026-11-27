@@ -28,6 +28,7 @@ export function DownloadsPage() {
   const queryClient = useQueryClient();
   const { showToast } = useAppStore();
   const [albumId, setAlbumId] = useState('');
+  const [photoId, setPhotoId] = useState('');
   const [fmt, setFmt] = useState<DownloadTask['download_type']>('folder');
 
   const { data: tasks = [] } = useQuery({
@@ -36,10 +37,20 @@ export function DownloadsPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => api.createDownload(albumId.trim(), fmt),
+    mutationFn: () => api.createDownload(albumId.trim(), fmt, photoId.trim() || undefined),
     onSuccess: (t) => {
       setAlbumId('');
+      setPhotoId('');
       showToast(`已创建任务 #${t.task_id}`, 'success');
+      queryClient.invalidateQueries({ queryKey: ['downloads'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (taskId: string) => api.retryDownload(taskId),
+    onSuccess: () => {
+      showToast('已重新加入排队', 'success');
       queryClient.invalidateQueries({ queryKey: ['downloads'] });
     },
     onError: (err: Error) => showToast(err.message, 'error'),
@@ -93,6 +104,18 @@ export function DownloadsPage() {
             onChange={(e) => setAlbumId(e.target.value)}
             placeholder="输入漫画 JM ID..."
             className="flex-1 min-w-[160px] min-h-[42px] rounded-full px-4 py-2 text-[14.5px] outline-none liquid-focus-ring"
+            style={{
+              backgroundColor: 'var(--liquid-solid)',
+              border: '1px solid var(--liquid-separator)',
+              color: 'var(--liquid-ink)',
+            }}
+          />
+          <input
+            type="text"
+            value={photoId}
+            onChange={(e) => setPhotoId(e.target.value)}
+            placeholder="可选章节 ID"
+            className="w-36 min-h-[42px] rounded-full px-4 py-2 text-[14px] outline-none liquid-focus-ring"
             style={{
               backgroundColor: 'var(--liquid-solid)',
               border: '1px solid var(--liquid-separator)',
@@ -154,7 +177,7 @@ export function DownloadsPage() {
                     >
                       {t.status === 'running' ? `${t.progress}%` : st.label}
                     </span>
-                    {t.status === 'running' ? (
+                    {t.status === 'running' || t.status === 'pending' ? (
                       <button
                         type="button"
                         title="取消"
@@ -170,7 +193,7 @@ export function DownloadsPage() {
                           <button
                             type="button"
                             title="重试"
-                            onClick={() => api.createDownload(t.album_id, t.download_type, t.photo_id || undefined)}
+                            onClick={() => retryMutation.mutate(t.task_id)}
                             className="p-2 cursor-pointer"
                             style={{ color: 'var(--liquid-accent)' }}
                           >

@@ -1,6 +1,8 @@
 from pathlib import Path
 
-from app.core.config import ConfigManager
+import pytest
+
+from app.core.config import ConfigManager, build_proxy_uri
 from app.core.security import decrypt_secret, encrypt_secret, hash_pin, verify_pin
 
 
@@ -36,3 +38,67 @@ def test_config_manager_syncs_option(tmp_path: Path):
 
     opt_dict = mgr.get_option_dict()
     assert opt_dict["client"]["impl"] == "html"
+
+
+def test_build_proxy_uri_and_toggle(tmp_path: Path):
+    assert build_proxy_uri("http://127.0.0.1:7890", "alice", "p@ss:1#") == (
+        "http://alice:p%40ss%3A1%23@127.0.0.1:7890"
+    )
+    assert build_proxy_uri("socks5://user:p%40ss@127.0.0.1:7891") == (
+        "socks5://user:p%40ss@127.0.0.1:7891"
+    )
+
+    mgr = ConfigManager(data_dir=tmp_path)
+    with pytest.raises(ValueError):
+        mgr.update_settings({"proxy_enabled": True, "proxy_url": ""})
+
+    enabled = mgr.update_settings(
+        {
+            "proxy_enabled": True,
+            "proxy_url": "http://127.0.0.1:7890",
+            "proxy_username": "alice",
+            "proxy_password": "p@ss",
+        }
+    )
+    assert enabled.proxy_enabled is True
+    assert mgr.get_option_dict()["client"]["postman"]["meta_data"]["proxies"] == (
+        "http://alice:p%40ss@127.0.0.1:7890"
+    )
+
+    disabled = mgr.update_settings({"proxy_enabled": False})
+    assert disabled.proxy_enabled is False
+    assert disabled.proxy_url == "http://127.0.0.1:7890"
+    assert disabled.proxy_username == "alice"
+    assert disabled.proxy_password == "p@ss"
+    assert mgr.get_option_dict()["client"]["postman"]["meta_data"]["proxies"] == {}
+
+
+def test_probe_proxy_sync_handles_success_and_407(monkeypatch):
+    from types import SimpleNamespace
+    from app.api.v2 import system as system_api
+
+    monkeypatch.setattr(
+        system_api.jm_adapter,
+        "get_api_client",
+        lambda prefer_auth=False: SimpleNamespace(get_domain_list=lambda: ["www.cdnbtd.cc"]),
+    )
+    captured_headers = []
+
+    def fake_get(url, **kwargs):
+        captured_headers.append(kwargs.get("headers"))
+        return SimpleNamespace(status_code=200)
+
+    monkeypatch.setattr(system_api.curl_requests, "get", fake_get)
+    ok_res = system_api._probe_proxy_sync("http://127.0.0.1:7890")
+    assert ok_res["reachable"] is True
+    assert ok_res["jm_reachable"] is True
+    assert captured_headers[0] and "token" in captured_headers[0] and "tokenparam" in captured_headers[0]
+
+    monkeypatch.setattr(
+        system_api.curl_requests,
+        "get",
+        lambda url, **kwargs: SimpleNamespace(status_code=407),
+    )
+    auth_fail = system_api._probe_proxy_sync("http://bad:pass@127.0.0.1:7890")
+    assert auth_fail["reachable"] is False
+    assert auth_fail["status_code"] == 407

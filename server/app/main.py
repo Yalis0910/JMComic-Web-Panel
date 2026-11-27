@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v2.router import api_v2_router
-from app.core.config import REPO_ROOT, config_manager
+from app.core.config import APP_VERSION, REPO_ROOT, config_manager
 from app.db.database import db
 from app.services.download_service import download_manager
 from app.services.library_service import library_service
@@ -29,7 +29,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="JMlis Server",
     description="JMlis 本地/局域网统一服务端 API v2",
-    version="2.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
@@ -46,7 +46,7 @@ app.include_router(api_v2_router)
 
 @app.get("/health")
 async def legacy_health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": APP_VERSION}
 
 
 if WEB_DIST_DIR.exists() and (WEB_DIST_DIR / "index.html").exists():
@@ -67,7 +67,7 @@ else:
     async def root_info():
         return {
             "service": "JMlis Server",
-            "version": "2.0.0",
+            "version": APP_VERSION,
             "docs": "/docs",
             "note": "Web 前端尚未构建，请运行 `cd web && npm run build` 或使用 Vite 开发服务器。",
         }

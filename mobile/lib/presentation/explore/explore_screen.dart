@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
-import '../detail/album_detail_screen.dart';
 import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
 import '../widgets/liquid_glass.dart';
@@ -349,6 +348,42 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     ),
                   ),
                   const SizedBox(height: 14),
+                  if (RegExp(r'^(?:jm)?(\d{4,8})$', caseSensitive: false).hasMatch(_searchCtrl.text.trim())) ...[
+                    Builder(
+                      builder: (ctx) {
+                        final m = RegExp(r'^(?:jm)?(\d{4,8})$', caseSensitive: false)
+                            .firstMatch(_searchCtrl.text.trim())!;
+                        final targetId = m.group(1)!;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: LiquidSpringControl(
+                            onTap: () => openAlbumDetailScreen(ctx, targetId),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+                              decoration: BoxDecoration(
+                                color: LiquidTokens.scene(ctx),
+                                borderRadius: BorderRadius.circular(999),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    '直达车号详情：JM$targetId',
+                                    style: const TextStyle(
+                                      color: CupertinoColors.white,
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const Icon(CupertinoIcons.arrow_right, size: 16, color: CupertinoColors.white),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
                   if (_query.isNotEmpty) ...[
                     SizedBox(
                       height: 36,
@@ -700,9 +735,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     return CommentCardTile(
                       comment: c,
                       onOpenAlbum: c.albumId.isNotEmpty
-                          ? () => Navigator.of(context).push(
-                                CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: c.albumId)),
-                              )
+                          ? () => openAlbumDetailScreen(context, c.albumId)
                           : null,
                     );
                   },
@@ -736,9 +769,7 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                     return ModernComicCard(
                       album: a,
                       rank: (_query.isEmpty && _tab == 'ranking') ? (_page - 1) * _pageSize + idx + 1 : null,
-                      onTap: () => Navigator.of(context).push(
-                        CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: a.albumId)),
-                      ),
+                      onTap: () => openAlbumDetailScreen(context, a.albumId),
                     );
                   },
                   childCount: _items.length,

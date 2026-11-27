@@ -65,4 +65,55 @@ void main() {
     expect(info.days[1].bonus, isTrue);
     expect(info.days[1].signed, isNull);
   });
+
+  test('HistoryRecord, BookmarkRecord, OfflineChapterMeta, and ServerDownloadTask roundtrip', () {
+    final hist = HistoryRecord.fromJson({
+      'album_id': '123456',
+      'photo_id': '1',
+      'source': 'local',
+      'title': 'Local Comic',
+      'page_index': 4,
+      'total_pages': 20,
+      'updated_at': 1700000000000,
+    });
+    expect(hist.source, 'local');
+    expect(hist.toJson()['source'], 'local');
+
+    final bm = BookmarkRecord.fromJson({
+      'bookmark_id': 'local:123456:1:4',
+      'album_id': '123456',
+      'photo_id': '1',
+      'source': 'local',
+      'title': 'Local Comic',
+      'page_index': 4,
+      'created_at': 1000,
+      'updated_at': 2000,
+      'deleted': 0,
+    });
+    expect(bm.deleted, isFalse);
+    expect(bm.pageIndex, 4);
+
+    final offline = OfflineChapterMeta.fromJson({
+      'album_id': '123456',
+      'album_title': 'Test Album',
+      'photo_id': '789',
+      'chapter_title': '第 1 话',
+      'page_count': 15,
+      'cached_at': 9999,
+    });
+    expect(offline.albumTitle, 'Test Album');
+    expect(offline.toJson()['page_count'], 15);
+
+    final dl = ServerDownloadTask.fromJson({
+      'task_id': 'abc',
+      'album_id': '123456',
+      'status': 'pending',
+      'download_type': 'zip',
+      'progress': '0',
+      'completed_count': 0,
+      'total_count': 30,
+    });
+    expect(dl.status, 'pending');
+    expect(dl.totalCount, 30);
+  });
 }

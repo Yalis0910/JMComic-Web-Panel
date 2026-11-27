@@ -409,6 +409,7 @@ class DailyCheckinInfo {
 class HistoryRecord {
   final String albumId;
   final String photoId;
+  final String source;
   final String title;
   final String chapterTitle;
   final String coverUrl;
@@ -419,6 +420,7 @@ class HistoryRecord {
   const HistoryRecord({
     required this.albumId,
     required this.photoId,
+    this.source = 'online',
     required this.title,
     this.chapterTitle = '',
     this.coverUrl = '',
@@ -430,6 +432,7 @@ class HistoryRecord {
   Map<String, dynamic> toJson() => {
         'album_id': albumId,
         'photo_id': photoId,
+        'source': source,
         'title': title,
         'chapter_title': chapterTitle,
         'cover_url': coverUrl,
@@ -441,11 +444,223 @@ class HistoryRecord {
   factory HistoryRecord.fromJson(Map<String, dynamic> json) => HistoryRecord(
         albumId: '${json['album_id'] ?? ''}',
         photoId: '${json['photo_id'] ?? ''}',
+        source: '${json['source'] ?? 'online'}'.isEmpty ? 'online' : '${json['source'] ?? 'online'}',
         title: '${json['title'] ?? ''}',
         chapterTitle: '${json['chapter_title'] ?? ''}',
         coverUrl: '${json['cover_url'] ?? ''}',
         pageIndex: parseJsonInt(json['page_index']),
         totalPages: parseJsonInt(json['total_pages']),
         updatedAt: parseJsonInt(json['updated_at']),
+      );
+}
+
+class BookmarkRecord {
+  final String bookmarkId;
+  final String albumId;
+  final String photoId;
+  final String source;
+  final String title;
+  final String chapterTitle;
+  final String coverUrl;
+  final int pageIndex;
+  final String note;
+  final int createdAt;
+  final int updatedAt;
+  final bool deleted;
+
+  const BookmarkRecord({
+    required this.bookmarkId,
+    required this.albumId,
+    required this.photoId,
+    this.source = 'online',
+    required this.title,
+    this.chapterTitle = '',
+    this.coverUrl = '',
+    required this.pageIndex,
+    this.note = '',
+    required this.createdAt,
+    required this.updatedAt,
+    this.deleted = false,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'bookmark_id': bookmarkId,
+        'album_id': albumId,
+        'photo_id': photoId,
+        'source': source,
+        'title': title,
+        'chapter_title': chapterTitle,
+        'cover_url': coverUrl,
+        'page_index': pageIndex,
+        'note': note,
+        'created_at': createdAt,
+        'updated_at': updatedAt,
+        'deleted': deleted,
+      };
+
+  factory BookmarkRecord.fromJson(Map<String, dynamic> json) => BookmarkRecord(
+        bookmarkId: '${json['bookmark_id'] ?? ''}',
+        albumId: '${json['album_id'] ?? ''}',
+        photoId: '${json['photo_id'] ?? ''}',
+        source: '${json['source'] ?? 'online'}',
+        title: '${json['title'] ?? ''}',
+        chapterTitle: '${json['chapter_title'] ?? ''}',
+        coverUrl: '${json['cover_url'] ?? ''}',
+        pageIndex: parseJsonInt(json['page_index']),
+        note: '${json['note'] ?? ''}',
+        createdAt: parseJsonInt(json['created_at']),
+        updatedAt: parseJsonInt(json['updated_at']),
+        deleted: json['deleted'] == true || parseJsonInt(json['deleted']) == 1,
+      );
+}
+
+class LocalShelfModel {
+  final String shelfId;
+  final String name;
+  final String description;
+  final int itemCount;
+  final int updatedAt;
+
+  const LocalShelfModel({
+    required this.shelfId,
+    required this.name,
+    this.description = '',
+    this.itemCount = 0,
+    this.updatedAt = 0,
+  });
+
+  factory LocalShelfModel.fromJson(Map<String, dynamic> json) => LocalShelfModel(
+        shelfId: '${json['shelf_id'] ?? ''}',
+        name: '${json['name'] ?? ''}',
+        description: '${json['description'] ?? ''}',
+        itemCount: parseJsonInt(json['item_count']),
+        updatedAt: parseJsonInt(json['updated_at']),
+      );
+}
+
+class LocalShelfItemModel {
+  final String shelfId;
+  final String albumId;
+  final String title;
+  final String author;
+  final String coverUrl;
+  final List<String> tags;
+
+  const LocalShelfItemModel({
+    required this.shelfId,
+    required this.albumId,
+    required this.title,
+    this.author = '',
+    this.coverUrl = '',
+    this.tags = const [],
+  });
+
+  factory LocalShelfItemModel.fromJson(Map<String, dynamic> json) => LocalShelfItemModel(
+        shelfId: '${json['shelf_id'] ?? ''}',
+        albumId: '${json['album_id'] ?? ''}',
+        title: '${json['title'] ?? ''}',
+        author: '${json['author'] ?? ''}',
+        coverUrl: '${json['cover_url'] ?? ''}',
+        tags: (json['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
+      );
+}
+
+class OfflineChapterMeta {
+  final String albumId;
+  final String albumTitle;
+  final String photoId;
+  final String chapterTitle;
+  final String coverUrl;
+  final int pageCount;
+  final int cachedAt;
+
+  const OfflineChapterMeta({
+    required this.albumId,
+    required this.albumTitle,
+    required this.photoId,
+    required this.chapterTitle,
+    this.coverUrl = '',
+    required this.pageCount,
+    required this.cachedAt,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'album_id': albumId,
+        'album_title': albumTitle,
+        'photo_id': photoId,
+        'chapter_title': chapterTitle,
+        'cover_url': coverUrl,
+        'page_count': pageCount,
+        'cached_at': cachedAt,
+      };
+
+  factory OfflineChapterMeta.fromJson(Map<String, dynamic> json) => OfflineChapterMeta(
+        albumId: '${json['album_id'] ?? ''}',
+        albumTitle: '${json['album_title'] ?? ''}',
+        photoId: '${json['photo_id'] ?? ''}',
+        chapterTitle: '${json['chapter_title'] ?? ''}',
+        coverUrl: '${json['cover_url'] ?? ''}',
+        pageCount: parseJsonInt(json['page_count']),
+        cachedAt: parseJsonInt(json['cached_at']),
+      );
+}
+
+class LocalLibraryItem {
+  final String albumId;
+  final String title;
+  final String author;
+  final List<String> tags;
+  final String format;
+  final int chapterCount;
+  final int pageCount;
+  final int sizeBytes;
+  final String coverUrl;
+
+  const LocalLibraryItem({
+    required this.albumId,
+    required this.title,
+    this.author = '',
+    this.tags = const [],
+    this.format = 'folder',
+    this.chapterCount = 1,
+    this.pageCount = 0,
+    this.sizeBytes = 0,
+    this.coverUrl = '',
+  });
+}
+
+class ServerDownloadTask {
+  final String taskId;
+  final String albumId;
+  final String title;
+  final String status;
+  final String downloadType;
+  final int progress;
+  final int completedCount;
+  final int totalCount;
+  final String? error;
+
+  const ServerDownloadTask({
+    required this.taskId,
+    required this.albumId,
+    required this.title,
+    required this.status,
+    required this.downloadType,
+    required this.progress,
+    required this.completedCount,
+    required this.totalCount,
+    this.error,
+  });
+
+  factory ServerDownloadTask.fromJson(Map<String, dynamic> json) => ServerDownloadTask(
+        taskId: '${json['task_id'] ?? ''}',
+        albumId: '${json['album_id'] ?? ''}',
+        title: '${json['title'] ?? ''}',
+        status: '${json['status'] ?? 'pending'}',
+        downloadType: '${json['download_type'] ?? 'folder'}',
+        progress: parseJsonInt(json['progress']),
+        completedCount: parseJsonInt(json['completed_count']),
+        totalCount: parseJsonInt(json['total_count']),
+        error: json['error']?.toString(),
       );
 }

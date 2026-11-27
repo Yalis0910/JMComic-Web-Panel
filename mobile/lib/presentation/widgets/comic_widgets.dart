@@ -1,18 +1,31 @@
+import 'dart:ui';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
+import '../detail/album_detail_screen.dart';
 import '../reader/reader_screen.dart';
 import '../theme/liquid_glass_theme.dart';
 import 'liquid_glass.dart';
+
+Future<void> openAlbumDetailScreen(BuildContext context, String albumId) {
+  return Navigator.of(context, rootNavigator: true).push(
+    CupertinoPageRoute(
+      builder: (_) => AlbumDetailScreen(albumId: albumId),
+    ),
+  );
+}
 
 Future<void> openReaderScreen(
   BuildContext context, {
   required String albumId,
   required String photoId,
   required String title,
+  String source = 'online',
+  String coverUrl = '',
   int initialPage = 0,
   List<ComicEpisode> episodes = const [],
 }) {
@@ -22,6 +35,8 @@ Future<void> openReaderScreen(
         albumId: albumId,
         photoId: photoId,
         title: title,
+        source: source,
+        coverUrl: coverUrl,
         initialPage: initialPage,
         initialEpisodes: episodes,
       ),
@@ -48,6 +63,8 @@ class ModernCoverImage extends ConsumerStatefulWidget {
   final double? width;
   final double? height;
   final BoxFit fit;
+  final bool allowPreview;
+  final bool tapToPreview;
 
   const ModernCoverImage({
     super.key,
@@ -58,6 +75,8 @@ class ModernCoverImage extends ConsumerStatefulWidget {
     this.width,
     this.height,
     this.fit = BoxFit.cover,
+    this.allowPreview = true,
+    this.tapToPreview = false,
   });
 
   @override
@@ -66,12 +85,15 @@ class ModernCoverImage extends ConsumerStatefulWidget {
 
 class _ModernCoverImageState extends ConsumerState<ModernCoverImage> {
   int _urlIndex = 0;
+  bool _tempReveal = false;
+  CoverPrivacyMode? _lastPrivacy;
 
   @override
   void didUpdateWidget(covariant ModernCoverImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.coverUrl != widget.coverUrl) {
       _urlIndex = 0;
+      _tempReveal = false;
     }
   }
 
@@ -82,8 +104,15 @@ class _ModernCoverImageState extends ConsumerState<ModernCoverImage> {
 
   @override
   Widget build(BuildContext context) {
-    final showCovers = ref.watch(hybridControllerProvider.select((s) => s.settings.showCovers));
-    if (!showCovers) {
+    final privacy = ref.watch(hybridControllerProvider.select((s) => s.settings.coverPrivacyMode));
+    if (_lastPrivacy != null && _lastPrivacy != privacy && _tempReveal) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _tempReveal = false);
+      });
+    }
+    _lastPrivacy = privacy;
+
+    if (privacy == CoverPrivacyMode.hide) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(widget.borderRadius),
         child: Container(
@@ -101,7 +130,14 @@ class _ModernCoverImageState extends ConsumerState<ModernCoverImage> {
     }
 
     final urls = _candidates;
-    final child = _urlIndex >= urls.length
+    final hasImage = _urlIndex < urls.length;
+    final isBlurred = privacy == CoverPrivacyMode.blur && !_tempReveal && hasImage;
+    final showPreviewToggle = widget.allowPreview &&
+        (widget.width == null || widget.width! >= 72) &&
+        privacy == CoverPrivacyMode.blur &&
+        hasImage;
+
+    Widget child = !hasImage
         ? Container(
             width: widget.width,
             height: widget.height,
@@ -148,6 +184,59 @@ class _ModernCoverImageState extends ConsumerState<ModernCoverImage> {
               );
             },
           );
+
+    if (isBlurred) {
+      child = ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: child,
+      );
+    }
+
+    if (showPreviewToggle) {
+      child = Stack(
+        fit: StackFit.passthrough,
+        children: [
+          if (widget.tapToPreview)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _tempReveal = !_tempReveal),
+              child: child,
+            )
+          else
+            child,
+          Positioned(
+            right: 7,
+            bottom: 8,
+            child: Semantics(
+              button: true,
+              label: isBlurred ? '临时预览封面' : '恢复模糊封面',
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => setState(() => _tempReveal = !_tempReveal),
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F1920).withValues(alpha: 0.62),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: CupertinoColors.white.withValues(alpha: 0.36),
+                      width: 0.7,
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    isBlurred ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+                    size: 14,
+                    color: CupertinoColors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(widget.borderRadius),

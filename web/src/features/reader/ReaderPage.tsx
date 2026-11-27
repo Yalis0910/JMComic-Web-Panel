@@ -1,16 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpDown,
+  Bookmark,
   ChevronLeft,
   ChevronRight,
+  HelpCircle,
   Layers,
   List,
   Maximize2,
   Minimize2,
   RotateCw,
   SlidersHorizontal,
+  Trash2,
 } from 'lucide-react';
 import { api, withPanelToken } from '../../api/client';
 import { useAppStore, type ReaderMode } from '../../stores/useAppStore';
@@ -47,7 +50,7 @@ function ComicImage({
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) onVisible();
       },
-      { threshold: 0.4 }
+      { threshold: 0, rootMargin: '-40% 0px -40% 0px' }
     );
     obs.observe(imgRef.current);
     return () => obs.disconnect();
@@ -92,6 +95,7 @@ export function ReaderPage() {
   const { source = 'online', albumId = '', photoId = '' } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const {
     readerMode,
@@ -102,8 +106,15 @@ export function ReaderPage() {
     setFitWidth,
     showThumbStrip,
     setShowThumbStrip,
+    doublePageRtl,
+    setDoublePageRtl,
+    doublePageCoverOffset,
+    setDoublePageCoverOffset,
+    readerBrightness,
+    setReaderBrightness,
     pageGap,
     setPageGap,
+    showToast,
   } = useAppStore();
 
   const startPage = Math.max(0, Number(searchParams.get('page') || 0));
@@ -112,6 +123,8 @@ export function ReaderPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [thumbsOpen, setThumbsOpen] = useState(false);
   const [chaptersOpen, setChaptersOpen] = useState(false);
+  const [bookmarksOpen, setBookmarksOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [epReverse, setEpReverse] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -146,7 +159,10 @@ export function ReaderPage() {
     if (source === 'local') {
       return (localChapterQuery.data?.pages || []).map((p) => ({ index: p.index - 1, url: withPanelToken(p.url) }));
     }
-    return (onlinePhotoQuery.data?.images || []).map((img, i) => ({ index: i, url: img.proxy_url }));
+    return (onlinePhotoQuery.data?.images || []).map((img, i) => ({
+      index: i,
+      url: withPanelToken(img.proxy_url),
+    }));
   }, [source, localChapterQuery.data, onlinePhotoQuery.data]);
 
   const chapters = useMemo(() => {
@@ -172,6 +188,46 @@ export function ReaderPage() {
       ? `/api/v2/library/${albumId}/cover`
       : `/api/v2/media/cover/${albumId}`;
 
+  const bookmarksQuery = useQuery({
+    queryKey: ['bookmarks', albumId],
+    queryFn: () => api.listBookmarks(albumId),
+    enabled: !!albumId,
+  });
+
+  const currentBookmark = useMemo(
+    () =>
+      (bookmarksQuery.data || []).find(
+        (b) => b.photo_id === photoId && b.page_index === currentIndex && (b.source || 'online') === (source === 'local' ? 'local' : 'online')
+      ),
+    [bookmarksQuery.data, photoId, currentIndex, source]
+  );
+
+  const bookmarkToggleMutation = useMutation({
+    mutationFn: async () => {
+      if (currentBookmark) {
+        await api.deleteBookmark(currentBookmark.bookmark_id);
+        return false;
+      }
+      await api.saveBookmark({
+        album_id: albumId,
+        photo_id: photoId,
+        source: source === 'local' ? 'local' : 'online',
+        title,
+        chapter_title: chapters[epIndex]?.name || '',
+        cover_url: coverUrl,
+        page_index: currentIndex,
+        note: '',
+      });
+      return true;
+    },
+    onSuccess: (added) => {
+      showToast(added ? `已收藏第 ${currentIndex + 1} 页书签` : '已移除本页书签', 'success');
+      queryClient.invalidateQueries({ queryKey: ['bookmarks', albumId] });
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    },
+    onError: (err: Error) => showToast(err.message, 'error'),
+  });
+
   const epIndex = chapters.findIndex((c) => c.id === photoId);
   const prevEp = epIndex > 0 ? chapters[epIndex - 1] : null;
   const nextEp = epIndex >= 0 && epIndex < chapters.length - 1 ? chapters[epIndex + 1] : null;
@@ -186,12 +242,14 @@ export function ReaderPage() {
   }, [currentIndex, pages, preloadCount]);
 
   useEffect(() => {
-    if (!albumId || !photoId || !pages.length || source !== 'online') return;
+    if (!albumId || !photoId || !pages.length) return;
+    const normSource = source === 'local' ? 'local' : 'online';
     const timer = setTimeout(() => {
       api
         .saveHistory({
           album_id: albumId,
           photo_id: photoId,
+          source: normSource,
           title,
           chapter_title: chapters[epIndex]?.name || '',
           cover_url: coverUrl,
@@ -214,12 +272,42 @@ export function ReaderPage() {
     [pages.length, readerMode]
   );
 
+  const doubleSpreadPages = useMemo(() => {
+    if (readerMode !== 'double' || pages.length === 0) return [];
+    if (doublePageCoverOffset && currentIndex === 0) {
+      return [pages[0]];
+    }
+    const base =
+      doublePageCoverOffset && currentIndex % 2 === 0
+        ? Math.max(1, currentIndex - 1)
+        : !doublePageCoverOffset && currentIndex % 2 === 1
+          ? currentIndex - 1
+          : currentIndex;
+    const pair = [pages[base], pages[base + 1]].filter((p): p is PageItem => Boolean(p));
+    return doublePageRtl ? [...pair].reverse() : pair;
+  }, [readerMode, pages, currentIndex, doublePageCoverOffset, doublePageRtl]);
+
   const stepPage = useCallback(
     (delta: number) => {
-      const step = readerMode === 'double' ? delta * 2 : delta;
-      goToPage(currentIndex + step);
+      if (readerMode === 'double') {
+        if (delta > 0) {
+          if (doublePageCoverOffset && currentIndex === 0) {
+            goToPage(1);
+            return;
+          }
+          goToPage(currentIndex + 2);
+        } else {
+          if (doublePageCoverOffset && currentIndex <= 2) {
+            goToPage(0);
+            return;
+          }
+          goToPage(currentIndex - 2);
+        }
+        return;
+      }
+      goToPage(currentIndex + delta);
     },
-    [currentIndex, goToPage, readerMode]
+    [currentIndex, doublePageCoverOffset, goToPage, readerMode]
   );
 
   const switchChapter = useCallback(
@@ -246,19 +334,22 @@ export function ReaderPage() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const rtl = readerMode === 'single-rtl' || (readerMode === 'double' && doublePageRtl);
       if (e.key === 'Escape') navigate(-1);
       else if (e.key === 'ArrowRight' || e.key === ' ') {
         e.preventDefault();
-        stepPage(readerMode === 'single-rtl' ? -1 : 1);
+        stepPage(rtl ? -1 : 1);
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        stepPage(readerMode === 'single-rtl' ? 1 : -1);
+        stepPage(rtl ? 1 : -1);
       } else if (e.key === '[' && prevEp) switchChapter(prevEp.id);
       else if (e.key === ']' && nextEp) switchChapter(nextEp.id);
+      else if (e.key.toLowerCase() === 'b') bookmarkToggleMutation.mutate();
+      else if (e.key === '?' || (e.shiftKey && e.key === '/')) setHelpOpen((v) => !v);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [navigate, nextEp, prevEp, readerMode, stepPage, switchChapter]);
+  }, [bookmarkToggleMutation, doublePageRtl, navigate, nextEp, prevEp, readerMode, stepPage, switchChapter]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -273,12 +364,13 @@ export function ReaderPage() {
       setHudVisible((v) => !v);
       return;
     }
+    const rtl = readerMode === 'single-rtl' || (readerMode === 'double' && doublePageRtl);
     const rect = e.currentTarget.getBoundingClientRect();
     const ratio = (e.clientX - rect.left) / rect.width;
     if (ratio < 0.3) {
-      stepPage(readerMode === 'single-rtl' ? 1 : -1);
+      stepPage(rtl ? 1 : -1);
     } else if (ratio > 0.7) {
-      stepPage(readerMode === 'single-rtl' ? -1 : 1);
+      stepPage(rtl ? -1 : 1);
     } else {
       setHudVisible((v) => !v);
     }
@@ -327,12 +419,28 @@ export function ReaderPage() {
                     <span className="hidden sm:inline">目录</span>
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => bookmarkToggleMutation.mutate()}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    setBookmarksOpen(true);
+                  }}
+                  className="w-9 h-9 rounded-full flex items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
+                  style={{
+                    backgroundColor: currentBookmark ? 'rgba(199, 228, 229, 0.28)' : 'rgba(255, 255, 255, 0.12)',
+                    color: currentBookmark ? '#C7E4E5' : '#ffffff',
+                  }}
+                  title="收藏/取消本页书签（右键查看全部）"
+                >
+                  <Bookmark className="w-4 h-4" fill={currentBookmark ? '#C7E4E5' : 'none'} />
+                </button>
                 {showThumbStrip && (
                   <button
                     type="button"
                     onClick={() => setThumbsOpen(true)}
                     className="w-9 h-9 rounded-full bg-white/12 flex items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
-                    title="缩略图与目录"
+                    title="缩略图与书签"
                   >
                     <Layers className="w-4 h-4" />
                   </button>
@@ -344,6 +452,14 @@ export function ReaderPage() {
                   title="阅读设置"
                 >
                   <SlidersHorizontal className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHelpOpen(true)}
+                  className="hidden sm:flex w-9 h-9 rounded-full bg-white/12 items-center justify-center cursor-pointer liquid-tactile liquid-focus-ring"
+                  title="快捷键说明 (?)"
+                >
+                  <HelpCircle className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
@@ -364,6 +480,7 @@ export function ReaderPage() {
         ref={stageRef}
         onClick={handleStageClick}
         className="flex-1 overflow-y-auto overflow-x-hidden select-none"
+        style={{ filter: readerBrightness < 100 ? `brightness(${readerBrightness / 100})` : undefined }}
       >
         {isLoading ? (
           <div className="h-full flex items-center justify-center text-white/60 text-[14px]">
@@ -409,18 +526,14 @@ export function ReaderPage() {
           </div>
         ) : readerMode === 'double' ? (
           <div className="h-full w-full flex items-center justify-center gap-2 px-2 py-16">
-            <ComicImage
-              src={pages[currentIndex]?.url || ''}
-              alt={`Page ${currentIndex + 1}`}
-              className="h-full flex-1"
-            />
-            {pages[currentIndex + 1] && (
+            {doubleSpreadPages.map((pg) => (
               <ComicImage
-                src={pages[currentIndex + 1].url}
-                alt={`Page ${currentIndex + 2}`}
-                className="h-full flex-1"
+                key={pg.index}
+                src={pg.url}
+                alt={`Page ${pg.index + 1}`}
+                className={doubleSpreadPages.length === 1 ? 'h-full max-w-3xl w-full' : 'h-full flex-1'}
               />
-            )}
+            ))}
           </div>
         ) : (
           <div className="h-full w-full flex items-center justify-center px-2 py-16">
@@ -518,6 +631,35 @@ export function ReaderPage() {
               }
             />
             <InsetRow label="宽度自适应" right={<LiquidSwitch checked={fitWidth} onChange={setFitWidth} />} />
+            <InsetRow
+              label="双页日漫方向 (右→左)"
+              right={<LiquidSwitch checked={doublePageRtl} onChange={setDoublePageRtl} />}
+            />
+            <InsetRow
+              label="双页封面单独成页"
+              right={<LiquidSwitch checked={doublePageCoverOffset} onChange={setDoublePageCoverOffset} />}
+            />
+            <InsetRow
+              label={`画面亮度 (${readerBrightness}%)`}
+              right={
+                <input
+                  type="range"
+                  min={40}
+                  max={100}
+                  value={readerBrightness}
+                  onChange={(e) => setReaderBrightness(Number(e.target.value))}
+                  className="w-28 accent-[#557B79]"
+                />
+              }
+            />
+            <InsetRow
+              label="查看本漫全部书签"
+              onClick={() => {
+                setSettingsOpen(false);
+                setBookmarksOpen(true);
+              }}
+              right={<span className="text-[13px]" style={{ color: 'var(--liquid-accent)' }}>{bookmarksQuery.data?.length || 0} 条</span>}
+            />
             <InsetRow
               label="条漫页间距 (px)"
               right={
@@ -653,6 +795,69 @@ export function ReaderPage() {
             })}
           </InsetGroup>
         </div>
+      </BottomSheet>
+
+      {/* 本漫书签 Sheet */}
+      <BottomSheet open={bookmarksOpen} onClose={() => setBookmarksOpen(false)} title={`本漫书签 (${bookmarksQuery.data?.length || 0})`}>
+        <div className="space-y-3.5">
+          <button
+            type="button"
+            onClick={() => bookmarkToggleMutation.mutate()}
+            className="w-full min-h-[42px] rounded-full text-[13.5px] font-semibold text-white cursor-pointer liquid-tactile"
+            style={{ backgroundColor: 'var(--liquid-scene)' }}
+          >
+            {currentBookmark ? `移除当前页 (第 ${currentIndex + 1} 页) 书签` : `添加当前页 (第 ${currentIndex + 1} 页) 书签`}
+          </button>
+          {(bookmarksQuery.data?.length || 0) === 0 ? (
+            <div className="py-6 text-center text-[13px]" style={{ color: 'var(--liquid-muted)' }}>
+              暂无书签
+            </div>
+          ) : (
+            <InsetGroup>
+              {(bookmarksQuery.data || []).map((b, idx, arr) => (
+                <InsetRow
+                  key={b.bookmark_id}
+                  label={`${b.chapter_title || `章节 ${b.photo_id}`} · 第 ${b.page_index + 1} 页`}
+                  sublabel={new Date(b.updated_at).toLocaleString()}
+                  isLast={idx === arr.length - 1}
+                  onClick={() => {
+                    setBookmarksOpen(false);
+                    if (b.photo_id === photoId) {
+                      goToPage(b.page_index);
+                    } else {
+                      navigate(`/read/${source}/${albumId}/${b.photo_id}?page=${b.page_index}`, { replace: true });
+                    }
+                  }}
+                  right={
+                    <button
+                      type="button"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        await api.deleteBookmark(b.bookmark_id);
+                        queryClient.invalidateQueries({ queryKey: ['bookmarks', albumId] });
+                      }}
+                      className="p-2 cursor-pointer"
+                      style={{ color: 'var(--liquid-danger)' }}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  }
+                />
+              ))}
+            </InsetGroup>
+          )}
+        </div>
+      </BottomSheet>
+
+      {/* 快捷键说明 Sheet */}
+      <BottomSheet open={helpOpen} onClose={() => setHelpOpen(false)} title="阅读器快捷键">
+        <InsetGroup>
+          <InsetRow label="← / → / 空格" sublabel="上一页 / 下一页（日漫与 RTL 双页自动反向）" />
+          <InsetRow label="[ / ]" sublabel="切换上一话 / 下一话" />
+          <InsetRow label="B" sublabel="收藏或移除当前页书签" />
+          <InsetRow label="?" sublabel="打开 / 关闭快捷键说明" />
+          <InsetRow label="Esc" sublabel="退出阅读器返回上一页" isLast />
+        </InsetGroup>
       </BottomSheet>
     </div>
   );

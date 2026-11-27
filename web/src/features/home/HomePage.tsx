@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowRight, BookOpen, ChevronRight, Clock, Flame, Search, Sparkles } from 'lucide-react';
-import { api } from '../../api/client';
+import { api, withPanelToken } from '../../api/client';
 import { useAppStore } from '../../stores/useAppStore';
 import { ComicCard } from '../../components/liquid/ComicCard';
 import { CoverImage } from '../../components/liquid/CoverImage';
@@ -13,7 +13,8 @@ import { extractHotTags } from '../../utils/categories';
 export function HomePage() {
   const navigate = useNavigate();
   const [keyword, setKeyword] = useState('');
-  const { quickTags, addRecentSearch, showCovers } = useAppStore();
+  const { quickTags, addRecentSearch, showCovers, coverPrivacyMode } = useAppStore();
+  const canShowBackdrop = coverPrivacyMode ? coverPrivacyMode === 'show' : showCovers;
 
   const { data: history = [] } = useQuery({
     queryKey: ['history'],
@@ -66,11 +67,11 @@ export function HomePage() {
     <div className="space-y-12">
       {/* Deep Sea Scenic Hero Stage — Clear Glass Controls over Textured Scene */}
       <section className="relative overflow-hidden rounded-[28px] liquid-scene-stage text-white p-6 sm:p-9 shadow-[0_20px_50px_-20px_rgba(19,37,41,0.45)]">
-        {showCovers && featuredAlbum?.cover_url && (
+        {canShowBackdrop && featuredAlbum?.cover_url && (
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 opacity-25 scale-110 blur-2xl bg-cover bg-center"
-            style={{ backgroundImage: `url(${featuredAlbum.cover_url})` }}
+            style={{ backgroundImage: `url(${withPanelToken(featuredAlbum.cover_url)})` }}
           />
         )}
         <div
@@ -163,7 +164,7 @@ export function HomePage() {
                   type="button"
                   onClick={() =>
                     navigate(
-                      `/read/online/${latestResume.album_id}/${latestResume.photo_id}?page=${latestResume.page_index}`
+                      `/read/${latestResume.source || 'online'}/${latestResume.album_id}/${latestResume.photo_id}?page=${latestResume.page_index}`
                     )
                   }
                   className="min-h-[46px] px-5 py-2.5 rounded-full inline-flex items-center gap-2 text-[13.5px] font-semibold text-white cursor-pointer liquid-focus-ring"
@@ -214,7 +215,7 @@ export function HomePage() {
                   key={item.album_id}
                   type="button"
                   onClick={() =>
-                    navigate(`/read/online/${item.album_id}/${item.photo_id}?page=${item.page_index}`)
+                    navigate(`/read/${item.source || 'online'}/${item.album_id}/${item.photo_id}?page=${item.page_index}`)
                   }
                   className="w-40 shrink-0 text-left liquid-solid-card liquid-card-hover p-2.5 cursor-pointer group flex flex-col gap-2.5 liquid-focus-ring"
                 >

@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 
 export type ThemeMode = 'system' | 'light' | 'dark';
 export type ReaderMode = 'vertical' | 'single-ltr' | 'single-rtl' | 'double';
+export type CoverPrivacyMode = 'show' | 'blur' | 'hide';
 
 interface ToastState {
   id: number;
@@ -24,6 +25,14 @@ interface AppStore {
   setShowThumbStrip: (v: boolean) => void;
   showCovers: boolean;
   setShowCovers: (v: boolean) => void;
+  coverPrivacyMode: CoverPrivacyMode;
+  setCoverPrivacyMode: (mode: CoverPrivacyMode) => void;
+  doublePageRtl: boolean;
+  setDoublePageRtl: (v: boolean) => void;
+  doublePageCoverOffset: boolean;
+  setDoublePageCoverOffset: (v: boolean) => void;
+  readerBrightness: number;
+  setReaderBrightness: (v: number) => void;
   pageGap: number;
   setPageGap: (px: number) => void;
 
@@ -58,7 +67,18 @@ export const useAppStore = create<AppStore>()(
       showThumbStrip: true,
       setShowThumbStrip: (showThumbStrip) => set({ showThumbStrip }),
       showCovers: true,
-      setShowCovers: (showCovers) => set({ showCovers }),
+      setShowCovers: (showCovers) =>
+        set({ showCovers, coverPrivacyMode: showCovers ? 'show' : 'hide' }),
+      coverPrivacyMode: 'show',
+      setCoverPrivacyMode: (coverPrivacyMode) =>
+        set({ coverPrivacyMode, showCovers: coverPrivacyMode === 'show' }),
+      doublePageRtl: false,
+      setDoublePageRtl: (doublePageRtl) => set({ doublePageRtl }),
+      doublePageCoverOffset: true,
+      setDoublePageCoverOffset: (doublePageCoverOffset) => set({ doublePageCoverOffset }),
+      readerBrightness: 100,
+      setReaderBrightness: (readerBrightness) =>
+        set({ readerBrightness: Math.max(40, Math.min(100, readerBrightness)) }),
       pageGap: 8,
       setPageGap: (pageGap) => set({ pageGap }),
 
@@ -101,6 +121,10 @@ export const useAppStore = create<AppStore>()(
         fitWidth: state.fitWidth,
         showThumbStrip: state.showThumbStrip,
         showCovers: state.showCovers,
+        coverPrivacyMode: state.coverPrivacyMode,
+        doublePageRtl: state.doublePageRtl,
+        doublePageCoverOffset: state.doublePageCoverOffset,
+        readerBrightness: state.readerBrightness,
         pageGap: state.pageGap,
         recentSearches: state.recentSearches,
         quickTags: state.quickTags,

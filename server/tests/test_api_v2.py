@@ -151,15 +151,64 @@ def test_api_v2_end_to_end(tmp_path: Path, monkeypatch):
         assert r_sync_old.status_code == 200
         assert r_sync_old.json()["data"]["items"][0]["page_index"] == 5
 
-        # 5. 开启 PIN 锁保护验证
+        # 5. 开启 PIN 锁保护验证（含媒体接口与系统配置接口）
         r_pin = client.post("/api/v2/system/pin", json={"enabled": True, "pin": "1234"})
         assert r_pin.status_code == 200
         assert client.get("/api/v2/library").status_code == 401
+        assert client.get("/api/v2/media/cover/123456").status_code == 401
+        assert client.get("/api/v2/system/settings").status_code == 401
 
         r_unlock = client.post("/api/v2/system/unlock", json={"pin": "1234"})
         assert r_unlock.status_code == 200
         token = r_unlock.json()["data"]["token"]
         assert client.get("/api/v2/library", headers={"X-Panel-Token": token}).status_code == 200
+        assert client.get("/api/v2/system/settings", headers={"X-Panel-Token": token}).status_code == 200
+        assert client.get(f"/api/v2/library/123456/cover?token={token}").status_code == 200
+
+        # 6. 书签 LWW 同步与本地书单 CRUD
+        r_bm = client.post(
+            "/api/v2/sync/bookmarks/merge",
+            headers={"X-Panel-Token": token},
+            json={
+                "since_ms": 0,
+                "items": [
+                    {
+                        "album_id": "123456",
+                        "photo_id": "1",
+                        "source": "local",
+                        "title": "Demo Comic",
+                        "page_index": 3,
+                        "updated_at": 5000,
+                    }
+                ],
+            },
+        )
+        assert r_bm.status_code == 200
+        bm_items = r_bm.json()["data"]["items"]
+        assert len(bm_items) == 1 and bm_items[0]["page_index"] == 3 and bm_items[0]["source"] == "local"
+
+        r_shelf = client.post(
+            "/api/v2/sync/shelves",
+            headers={"X-Panel-Token": token},
+            json={"name": "精选待看"},
+        )
+        assert r_shelf.status_code == 200
+        shelf_id = r_shelf.json()["data"]["shelf_id"]
+
+        r_add_item = client.post(
+            f"/api/v2/sync/shelves/{shelf_id}/items",
+            headers={"X-Panel-Token": token},
+            json={"album_id": "123456", "title": "Demo Comic", "author": "Tester"},
+        )
+        assert r_add_item.status_code == 200
+
+        r_by_album = client.get("/api/v2/sync/shelves/by-album/123456", headers={"X-Panel-Token": token})
+        assert shelf_id in r_by_album.json()["data"]
+
+        # 7. 本地书库打包导出
+        r_export = client.get("/api/v2/library/123456/export", headers={"X-Panel-Token": token})
+        assert r_export.status_code == 200
+        assert r_export.headers["content-type"] == "application/zip"
 
 
 def test_clean_html_text_strips_tags_and_entities():
@@ -354,3 +403,88 @@ def test_virtual_pagination_splits_80_into_40_and_caches(monkeypatch):
     assert len(p3["albums"]) == 40
     assert p3["albums"][0]["album_id"] == "81"
     assert upstream_calls == [1, 2]
+
+
+def test_library_deep_scan_multi_zip_and_pdf(tmp_path: Path):
+    import json
+    from app.services.library_service import _scan_dir_sync, _inspect_zip_chapters
+
+    # 作者归档父目录 -> 漫画目录 -> 章节目录 + .jmlis-meta.json
+    nested_album = tmp_path / "AuthorA" / "My Manga 778899"
+    (nested_album / "第1话").mkdir(parents=True)
+    (nested_album / "第1话" / "001.png").write_bytes(_make_png_bytes())
+    (nested_album / ".jmlis-meta.json").write_text(
+        json.dumps({"album_id": "778899", "title": "My Manga", "author": "AuthorA", "tags": ["汉化"]}),
+        encoding="utf-8",
+    )
+
+    # 多章节 ZIP
+    multi_zip = tmp_path / "Multi_889900.zip"
+    with zipfile.ZipFile(multi_zip, "w") as zf:
+        zf.writestr("01_序章/001.png", _make_png_bytes())
+        zf.writestr("02_终章/001.png", _make_png_bytes())
+
+    # PDF 文件
+    (tmp_path / "Book_112233.pdf").write_bytes(b"%PDF-1.4\n")
+
+    items = _scan_dir_sync(tmp_path)
+    by_id = {it["album_id"]: it for it in items}
+    assert "778899" in by_id
+    assert by_id["778899"]["author"] == "AuthorA"
+    assert by_id["778899"]["tags"] == ["汉化"]
+
+    assert "889900" in by_id
+    assert by_id["889900"]["chapter_count"] == 2
+    assert len(_inspect_zip_chapters(multi_zip)) == 2
+
+    assert "112233" in by_id
+    assert by_id["112233"]["format"] == "pdf"
+
+
+def test_download_queue_pending_cancel_and_retry(tmp_path: Path, monkeypatch):
+    import asyncio
+    from app.core.config import config_manager
+    from app.db.database import db
+    from app.services.download_service import DownloadManager
+
+    config_manager.configure_data_dir(tmp_path / "data")
+    config_manager.update_settings({"max_concurrent_downloads": 1})
+
+    async def _run():
+        await db.init()
+        mgr = DownloadManager()
+        mgr._loop = asyncio.get_running_loop()
+
+        gate = __import__("threading").Event()
+
+        def fake_worker(task_id, album_id, download_type, photo_id):
+            gate.wait(timeout=2.0)
+            with mgr._lock:
+                t = mgr._tasks.get(task_id)
+                if t and t["status"] != "cancelled":
+                    t["status"] = "completed"
+                    t["progress"] = 100
+
+        monkeypatch.setattr(mgr, "_worker_run", fake_worker)
+
+        t1 = await mgr.start_download("100001")
+        t2 = await mgr.start_download("100002")
+
+        await asyncio.sleep(0.05)
+        listed = {t["task_id"]: t for t in await mgr.list_tasks()}
+        assert listed[t1["task_id"]]["status"] == "running"
+        assert listed[t2["task_id"]]["status"] == "pending"
+
+        await mgr.cancel_task(t2["task_id"])
+        assert (await mgr.get_task(t2["task_id"]))["status"] == "cancelled"
+
+        gate.set()
+        await asyncio.sleep(0.1)
+        assert (await mgr.get_task(t1["task_id"]))["status"] == "completed"
+
+        retried = await mgr.retry_task(t2["task_id"])
+        assert retried["status"] in ("pending", "running", "completed")
+        await asyncio.sleep(0.1)
+        assert (await mgr.get_task(t2["task_id"]))["status"] == "completed"
+
+    asyncio.run(_run())

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Search, Sparkles, X } from 'lucide-react';
 import { api } from '../../api/client';
@@ -10,6 +10,7 @@ import { PaginationBar, PillSelect, SegmentedControl, SkeletonCardGrid } from '.
 import { extractHotTags, resolveCategories, resolveSubCategories } from '../../utils/categories';
 
 export function SearchPage() {
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const initialQ = params.get('q') || '';
   const initialType = params.get('type') || 'all';
@@ -100,6 +101,8 @@ export function SearchPage() {
     updateParams({ q: clean, type: nextType, page: '1' });
   };
 
+  const directIdMatch = (input || queryText).trim().match(/^(?:jm)?(\d{4,8})$/i);
+
   return (
     <div className="space-y-7">
       <div>
@@ -129,6 +132,16 @@ export function SearchPage() {
               className="flex-1 min-h-[44px] bg-transparent text-[15px] outline-none"
               style={{ color: 'var(--liquid-ink)' }}
             />
+            {directIdMatch && (
+              <button
+                type="button"
+                onClick={() => navigate(`/album/${directIdMatch[1]}`)}
+                className="min-h-[38px] px-4 rounded-full text-[13px] font-semibold cursor-pointer liquid-tactile shrink-0"
+                style={{ backgroundColor: 'var(--liquid-focus-soft)', color: 'var(--liquid-accent)' }}
+              >
+                直达 JM{directIdMatch[1]} →
+              </button>
+            )}
             <button
               type="submit"
               className="min-h-[42px] px-6 rounded-full text-[14px] font-semibold text-white cursor-pointer liquid-tactile liquid-focus-ring"
@@ -342,7 +355,7 @@ export function SearchPage() {
           </div>
           {data.page_count > 1 && (
             <PaginationBar
-              page={initialPage}
+              page={page}
               pageCount={data.page_count}
               onPageChange={(nextPage) => updateParams({ page: String(nextPage) })}
             />

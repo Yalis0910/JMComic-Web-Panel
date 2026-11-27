@@ -52,6 +52,15 @@ async def cancel_task(task_id: str):
     return ok(None, "任务已取消")
 
 
+@router.post("/tasks/{task_id}/retry")
+async def retry_task(task_id: str):
+    try:
+        task = await download_manager.retry_task(task_id)
+        return ok(task, "任务已重新加入排队")
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_task(task_id: str):
     await download_manager.delete_task(task_id)

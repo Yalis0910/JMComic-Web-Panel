@@ -1,5 +1,8 @@
-from fastapi import APIRouter, HTTPException, Query
-from fastapi.responses import Response
+from pathlib import Path
+from urllib.parse import quote
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 
 from app.api.v2.common import ok
 from app.services.library_service import library_service
@@ -52,6 +55,28 @@ async def get_library_page_image(album_id: str, chapter_id: str, page_index: int
         return Response(content=content, media_type=mime, headers={"Cache-Control": "public, max-age=86400"})
     except (FileNotFoundError, IndexError) as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.get("/{album_id}/export")
+async def export_library_item(
+    album_id: str,
+    background_tasks: BackgroundTasks,
+    inline: bool = Query(False),
+):
+    try:
+        file_path, filename, media_type, is_temp = await library_service.prepare_export(album_id)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+    if is_temp:
+        background_tasks.add_task(lambda p: Path(p).unlink(missing_ok=True), str(file_path))
+
+    disposition = "inline" if inline else "attachment"
+    encoded_name = quote(filename)
+    headers = {
+        "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_name}",
+    }
+    return FileResponse(path=str(file_path), media_type=media_type, headers=headers)
 
 
 @router.delete("/{album_id}")

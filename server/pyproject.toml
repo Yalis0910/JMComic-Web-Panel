@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jmlis-server"
-version = "2.0.0"
+version = "2.1.0"
 description = "JMlis Local/LAN Backend Server (FastAPI + SQLite + JMComic)"
 requires-python = ">=3.10"
 dependencies = [

@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/comic_models.dart';
 import '../../data/repositories/hybrid_controller.dart';
 import '../../data/sources/comic_data_source.dart';
-import '../detail/album_detail_screen.dart';
 import '../explore/explore_screen.dart';
 import '../theme/liquid_glass_theme.dart';
 import '../widgets/comic_widgets.dart';
@@ -14,8 +13,9 @@ import '../widgets/liquid_glass.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final VoidCallback? onOpenExplore;
+  final VoidCallback? onOpenSettings;
 
-  const HomeScreen({super.key, this.onOpenExplore});
+  const HomeScreen({super.key, this.onOpenExplore, this.onOpenSettings});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -123,6 +123,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               fallbacks: featured.coverFallbacks,
                               headers: featured.coverHeaders,
                               borderRadius: 0,
+                              allowPreview: false,
                             ),
                           ),
                         ),
@@ -186,6 +187,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 onTap: () {
                                   if (!hybrid.account.isLoggedIn) {
                                     showAccountLoginSheet(context, ref);
+                                  } else {
+                                    widget.onOpenSettings?.call();
                                   }
                                 },
                                 child: LiquidGlassSurface(
@@ -360,6 +363,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               albumId: h.albumId,
                               photoId: h.photoId,
                               title: h.title,
+                              source: h.source,
+                              coverUrl: h.coverUrl,
                               initialPage: h.pageIndex,
                             ),
                             child: SizedBox(
@@ -491,9 +496,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         width: 138,
                         child: ModernComicCard(
                           album: album,
-                          onTap: () => Navigator.of(context).push(
-                            CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
-                          ),
+                          onTap: () => openAlbumDetailScreen(context, album.albumId),
                         ),
                       );
                     },
@@ -540,9 +543,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       width: 138,
                       child: ModernComicCard(
                         album: album,
-                        onTap: () => Navigator.of(context).push(
-                          CupertinoPageRoute(builder: (_) => AlbumDetailScreen(albumId: album.albumId)),
-                        ),
+                        onTap: () => openAlbumDetailScreen(context, album.albumId),
                       ),
                     );
                   },

@@ -33,13 +33,22 @@ class LanServerSource implements ComicDataSource {
   @override
   bool get supportsWebOnlyFilters => true;
 
+  @override
+  bool get supportsServerDownload => true;
+
   Map<String, String> get _authHeaders =>
       panelToken.isNotEmpty ? {'X-Panel-Token': panelToken} : const {};
 
   String _absUrl(String path) {
-    if (path.startsWith('http')) return path;
     final cleanBase = baseUrl.replaceAll(RegExp(r'/$'), '');
-    return '$cleanBase$path';
+    final full = path.startsWith('http') ? path : '$cleanBase$path';
+    if (panelToken.isEmpty) return full;
+    if (!full.contains('/api/v2/media/') && !full.contains('/api/v2/library/')) {
+      return full;
+    }
+    if (full.contains('token=')) return full;
+    final sep = full.contains('?') ? '&' : '?';
+    return '$full${sep}token=${Uri.encodeQueryComponent(panelToken)}';
   }
 
   ComicSummary _parseSummary(Map<String, dynamic> m) {
@@ -428,5 +437,165 @@ class LanServerSource implements ComicDataSource {
       '/api/v2/album/$albumId/comments',
       data: {'comment': comment, 'comment_id': commentId, 'spoiler': spoiler},
     );
+  }
+
+  Future<List<BookmarkRecord>> mergeBookmarks(List<BookmarkRecord> localItems) async {
+    final resp = await _dio.post(
+      '/api/v2/sync/bookmarks/merge',
+      data: {
+        'since_ms': 0,
+        'items': localItems.map((e) => e.toJson()).toList(),
+      },
+    );
+    final items = (resp.data['data']['items'] as List?) ?? const [];
+    return items.map((e) => BookmarkRecord.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<void> deleteBookmark(String bookmarkId) async {
+    await _dio.delete('/api/v2/sync/bookmarks/${Uri.encodeComponent(bookmarkId)}');
+  }
+
+  Future<List<LocalShelfModel>> listShelves() async {
+    final resp = await _dio.get('/api/v2/sync/shelves');
+    final list = (resp.data['data'] as List?) ?? const [];
+    return list.map((e) => LocalShelfModel.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<LocalShelfModel> saveShelf(String name, {String? shelfId}) async {
+    final resp = await _dio.post(
+      '/api/v2/sync/shelves',
+      data: {'name': name, if (shelfId != null) 'shelf_id': shelfId},
+    );
+    return LocalShelfModel.fromJson(Map<String, dynamic>.from(resp.data['data']));
+  }
+
+  Future<void> deleteShelf(String shelfId) async {
+    await _dio.delete('/api/v2/sync/shelves/${Uri.encodeComponent(shelfId)}');
+  }
+
+  Future<List<String>> listAlbumShelves(String albumId) async {
+    final resp = await _dio.get('/api/v2/sync/shelves/by-album/${Uri.encodeComponent(albumId)}');
+    final list = (resp.data['data'] as List?) ?? const [];
+    return list.map((e) => '$e').toList();
+  }
+
+  Future<List<LocalShelfItemModel>> listShelfItems(String shelfId) async {
+    final resp = await _dio.get('/api/v2/sync/shelves/${Uri.encodeComponent(shelfId)}/items');
+    final list = (resp.data['data'] as List?) ?? const [];
+    return list.map((e) {
+      final m = Map<String, dynamic>.from(e);
+      m['cover_url'] = _absUrl('${m['cover_url'] ?? '/api/v2/media/cover/${m['album_id']}'}');
+      return LocalShelfItemModel.fromJson(m);
+    }).toList();
+  }
+
+  Future<void> addShelfItem(
+    String shelfId, {
+    required String albumId,
+    required String title,
+    String author = '',
+    String coverUrl = '',
+    List<String> tags = const [],
+  }) async {
+    await _dio.post(
+      '/api/v2/sync/shelves/${Uri.encodeComponent(shelfId)}/items',
+      data: {
+        'album_id': albumId,
+        'title': title,
+        'author': author,
+        'cover_url': coverUrl,
+        'tags': tags,
+      },
+    );
+  }
+
+  Future<void> removeShelfItem(String shelfId, String albumId) async {
+    await _dio.delete('/api/v2/sync/shelves/${Uri.encodeComponent(shelfId)}/items/${Uri.encodeComponent(albumId)}');
+  }
+
+  Future<List<LocalLibraryItem>> listLocalLibrary() async {
+    final resp = await _dio.get('/api/v2/library');
+    final list = (resp.data['data'] as List?) ?? const [];
+    return list.map((raw) {
+      final m = Map<String, dynamic>.from(raw);
+      final aid = '${m['album_id'] ?? ''}';
+      return LocalLibraryItem(
+        albumId: aid,
+        title: '${m['title'] ?? ''}',
+        author: '${m['author'] ?? ''}',
+        tags: (m['tags'] as List?)?.map((e) => '$e').toList() ?? const [],
+        format: '${m['format'] ?? 'folder'}',
+        chapterCount: parseJsonInt(m['chapter_count'], 1),
+        pageCount: parseJsonInt(m['page_count']),
+        sizeBytes: parseJsonInt(m['size_bytes']),
+        coverUrl: _absUrl('/api/v2/library/$aid/cover'),
+      );
+    }).toList();
+  }
+
+  Future<List<LocalLibraryItem>> scanLocalLibrary() async {
+    await _dio.post('/api/v2/library/scan');
+    return listLocalLibrary();
+  }
+
+  Future<List<ComicEpisode>> getLocalEpisodes(String albumId) async {
+    final resp = await _dio.get('/api/v2/library/${Uri.encodeComponent(albumId)}');
+    final d = Map<String, dynamic>.from(resp.data['data'] ?? const {});
+    final chapters = (d['chapters'] as List?) ?? const [];
+    return chapters.map((c) {
+      final m = Map<String, dynamic>.from(c);
+      return ComicEpisode(
+        photoId: '${m['chapter_id'] ?? '1'}',
+        index: parseJsonInt(m['index'], 1),
+        name: '${m['name'] ?? ''}',
+      );
+    }).toList();
+  }
+
+  Future<List<ChapterImageItem>> getLocalChapterImages(String albumId, String chapterId) async {
+    final resp = await _dio.get(
+      '/api/v2/library/${Uri.encodeComponent(albumId)}/chapters/${Uri.encodeComponent(chapterId)}',
+    );
+    final pages = (resp.data['data']['pages'] as List?) ?? const [];
+    return pages.map((p) {
+      final m = Map<String, dynamic>.from(p);
+      return ChapterImageItem(
+        index: parseJsonInt(m['index'], 1),
+        url: _absUrl('${m['url'] ?? ''}'),
+        scrambleId: 0,
+      );
+    }).toList();
+  }
+
+  Future<List<ServerDownloadTask>> listServerDownloads() async {
+    final resp = await _dio.get('/api/v2/download/tasks');
+    final list = (resp.data['data'] as List?) ?? const [];
+    return list.map((e) => ServerDownloadTask.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<void> cancelServerDownload(String taskId) async {
+    await _dio.post('/api/v2/download/tasks/${Uri.encodeComponent(taskId)}/cancel');
+  }
+
+  Future<void> retryServerDownload(String taskId) async {
+    await _dio.post('/api/v2/download/tasks/${Uri.encodeComponent(taskId)}/retry');
+  }
+
+  Future<void> deleteServerDownload(String taskId) async {
+    await _dio.delete('/api/v2/download/tasks/${Uri.encodeComponent(taskId)}');
+  }
+
+  @override
+  Future<String> createServerDownload(String albumId, {String downloadType = 'folder', String? photoId}) async {
+    final resp = await _dio.post(
+      '/api/v2/download/tasks',
+      data: {
+        'album_id': albumId,
+        'download_type': downloadType,
+        if (photoId != null && photoId.isNotEmpty) 'photo_id': photoId,
+      },
+    );
+    final d = Map<String, dynamic>.from(resp.data['data'] ?? const {});
+    return '${d['task_id'] ?? ''}';
   }
 }

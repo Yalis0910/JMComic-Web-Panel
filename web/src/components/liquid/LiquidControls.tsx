@@ -115,6 +115,9 @@ export function PillSelect<T extends string>({
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const activeOptionRef = useRef<HTMLButtonElement | null>(null);
+  const didScrollToActiveRef = useRef(false);
   const [menuPos, setMenuPos] = useState<{
     top: number;
     left: number;
@@ -145,13 +148,36 @@ export function PillSelect<T extends string>({
       return;
     }
     updatePosition();
+    const onScroll = (e: Event) => {
+      if (e.target instanceof Node && menuRef.current?.contains(e.target)) return;
+      updatePosition();
+    };
     window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('scroll', onScroll, true);
     return () => {
       window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
+      window.removeEventListener('scroll', onScroll, true);
     };
   }, [open, updatePosition]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      didScrollToActiveRef.current = false;
+      return;
+    }
+    if (!menuPos || didScrollToActiveRef.current) return;
+    const list = listRef.current;
+    const activeEl = activeOptionRef.current;
+    if (list && activeEl) {
+      const listRect = list.getBoundingClientRect();
+      const elRect = activeEl.getBoundingClientRect();
+      const offsetInList = elRect.top - listRect.top + list.scrollTop;
+      const maxScroll = Math.max(0, list.scrollHeight - list.clientHeight);
+      const targetTop = offsetInList - list.clientHeight / 2 + elRect.height / 2;
+      list.scrollTop = Math.max(0, Math.min(targetTop, maxScroll));
+    }
+    didScrollToActiveRef.current = true;
+  }, [open, menuPos]);
 
   useEffect(() => {
     if (!open) return;
@@ -213,13 +239,16 @@ export function PillSelect<T extends string>({
             }}
           >
             <LiquidGlass variant="tinted" radius={24} className="p-1.5">
-              <div className="max-h-72 overflow-y-auto space-y-0.5">
+              <div ref={listRef} role="listbox" className="relative max-h-72 overflow-y-auto space-y-0.5">
                 {options.map((opt) => {
                   const active = opt.value === value;
                   return (
                     <button
                       key={opt.value}
+                      ref={active ? activeOptionRef : undefined}
                       type="button"
+                      role="option"
+                      aria-selected={active}
                       onClick={() => {
                         onChange(opt.value);
                         setOpen(false);
@@ -480,28 +509,33 @@ export function BottomSheet({
 }) {
   useEffect(() => {
     if (!open) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', onEsc);
-    return () => document.removeEventListener('keydown', onEsc);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', onEsc);
+    };
   }, [open, onClose]);
 
-  if (!open) return null;
-  return (
+  if (!open || typeof document === 'undefined') return null;
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-xs p-0 sm:p-4"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-lg max-h-[85vh] flex flex-col rounded-t-[28px] sm:rounded-[28px] overflow-hidden liquid-tinted-surface animate-[liquidSlideUp_0.34s_cubic-bezier(0.26,1.55,0.52,1)]"
+        className="w-full sm:max-w-lg max-h-[85dvh] sm:max-h-[85vh] flex flex-col rounded-t-[28px] sm:rounded-[28px] overflow-hidden liquid-tinted-surface animate-[liquidSlideUp_0.34s_cubic-bezier(0.26,1.55,0.52,1)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sm:hidden flex justify-center pt-3 pb-1">
+        <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
           <div className="h-1 w-10 rounded-full" style={{ backgroundColor: 'var(--liquid-fill-mid)' }} />
         </div>
         {title && (
-          <div className="flex items-center justify-between px-6 py-4 liquid-hairline-b">
+          <div className="flex items-center justify-between px-6 py-4 liquid-hairline-b shrink-0">
             <h3 className="text-[17px] font-semibold tracking-tight">{title}</h3>
             <button
               type="button"
@@ -513,9 +547,10 @@ export function BottomSheet({
             </button>
           </div>
         )}
-        <div className="overflow-y-auto p-5 sm:p-6 safe-bottom">{children}</div>
+        <div className="overflow-y-auto overscroll-contain p-5 sm:p-6 safe-bottom">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

@@ -437,7 +437,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                             child: Image.asset('assets/icon/app_icon.png', width: 28, height: 28),
                           ),
                           title: const Text('JMlis'),
-                          subtitle: const Text('v2.0.2 · Liquid Glass 跨平台漫画阅读器'),
+                          subtitle: const Text('v2.0.3 · Liquid Glass 跨平台漫画阅读器'),
                         ),
                       ],
                     ),

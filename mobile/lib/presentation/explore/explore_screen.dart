@@ -580,49 +580,78 @@ class _ExploreScreenState extends ConsumerState<ExploreScreen> {
                         ),
                       ],
                     ] else if (_tab == 'week' && _weekMeta.categories.isNotEmpty) ...[
-                      SizedBox(
-                        height: 36,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: _weekMeta.categories.take(20).length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 8),
-                          itemBuilder: (_, i) {
-                            final wc = _weekMeta.categories[i];
-                            return _buildPillChip(
-                              label: wc.title,
-                              active: _weekCatId == wc.id,
-                              compact: true,
-                              onTap: () {
-                                setState(() => _weekCatId = wc.id);
+                      LiquidGlassSurface(
+                        variant: LiquidGlassVariant.tinted,
+                        borderRadius: LiquidTokens.radiusCard,
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            LiquidPillSelect<String>(
+                              value: _weekCatId.isNotEmpty
+                                  ? _weekCatId
+                                  : _weekMeta.categories.first.id,
+                              sheetTitle: '选择期数',
+                              items: [
+                                for (final wc in _weekMeta.categories)
+                                  (
+                                    value: wc.id,
+                                    label: wc.title.isNotEmpty
+                                        ? wc.title
+                                        : (wc.time.isNotEmpty ? wc.time : '第${wc.id}期'),
+                                  ),
+                              ],
+                              onChanged: (id) {
+                                if (id == _weekCatId) return;
+                                setState(() => _weekCatId = id);
                                 _loadActiveTab();
                               },
-                            );
-                          },
+                            ),
+                            if (_weekMeta.types.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              if (_weekMeta.types.length <= 4)
+                                LiquidSegmentedPill<String>(
+                                  value: _weekMeta.types.any((t) => t.id == _weekTypeId)
+                                      ? _weekTypeId
+                                      : _weekMeta.types.first.id,
+                                  items: [
+                                    for (final wt in _weekMeta.types)
+                                      (
+                                        value: wt.id,
+                                        label: wt.title.isNotEmpty ? wt.title : wt.id,
+                                      ),
+                                  ],
+                                  onChanged: (id) {
+                                    if (id == _weekTypeId) return;
+                                    setState(() => _weekTypeId = id);
+                                    _loadActiveTab();
+                                  },
+                                )
+                              else
+                                SizedBox(
+                                  height: 34,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: _weekMeta.types.length,
+                                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                                    itemBuilder: (_, i) {
+                                      final wt = _weekMeta.types[i];
+                                      return _buildPillChip(
+                                        label: wt.title,
+                                        active: _weekTypeId == wt.id,
+                                        compact: true,
+                                        onTap: () {
+                                          setState(() => _weekTypeId = wt.id);
+                                          _loadActiveTab();
+                                        },
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ],
                         ),
                       ),
-                      if (_weekMeta.types.isNotEmpty) ...[
-                        const SizedBox(height: 9),
-                        SizedBox(
-                          height: 34,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _weekMeta.types.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (_, i) {
-                              final wt = _weekMeta.types[i];
-                              return _buildPillChip(
-                                label: wt.title,
-                                active: _weekTypeId == wt.id,
-                                compact: true,
-                                onTap: () {
-                                  setState(() => _weekTypeId = wt.id);
-                                  _loadActiveTab();
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      ],
                     ],
                   ],
                 ],

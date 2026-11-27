@@ -507,7 +507,7 @@ export function LiquidLayout() {
 
       {/* 顶部悬浮着色玻璃胶囊 Toast */}
       {toast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-liquid-in">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[80] pointer-events-none animate-liquid-in">
           <LiquidGlass variant="tinted" radius={999} className="px-5 py-2.5">
             <span
               className="text-[13.5px] font-medium"

@@ -270,7 +270,7 @@ html[data-theme="dark"] .liquid-card-hover:hover {
 }
 
 .animate-liquid-in {
-  animation: liquidFadeIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: liquidFadeIn 0.34s cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {

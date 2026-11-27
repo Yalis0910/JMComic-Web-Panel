@@ -389,6 +389,266 @@ class LiquidSegmentedPill<T> extends StatelessWidget {
   }
 }
 
+/// Pill-shaped selector button that opens a tinted Liquid Glass sheet
+/// automatically scrolled to the currently selected item.
+class LiquidPillSelect<T> extends StatelessWidget {
+  final List<({T value, String label})> items;
+  final T value;
+  final ValueChanged<T> onChanged;
+  final String placeholder;
+  final String? sheetTitle;
+
+  const LiquidPillSelect({
+    super.key,
+    required this.items,
+    required this.value,
+    required this.onChanged,
+    this.placeholder = '请选择',
+    this.sheetTitle,
+  });
+
+  Future<void> _openSelector(BuildContext context) async {
+    if (items.isEmpty) return;
+    final selected = await showCupertinoModalPopup<T>(
+      context: context,
+      builder: (_) => _LiquidPillSelectSheet<T>(
+        items: items,
+        value: value,
+        title: sheetTitle ?? placeholder,
+      ),
+    );
+    if (selected != null && selected != value) {
+      onChanged(selected);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = LiquidTokens.isDark(context);
+    final selectedIdx = items.indexWhere((e) => e.value == value);
+    final currentLabel = selectedIdx >= 0 ? items[selectedIdx].label : placeholder;
+
+    return LiquidSpringControl(
+      onTap: items.isEmpty ? null : () => _openSelector(context),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
+        decoration: BoxDecoration(
+          color: LiquidTokens.solid(context),
+          borderRadius: BorderRadius.circular(LiquidTokens.radiusPill),
+          border: Border.all(color: LiquidTokens.separator(context)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF132529).withValues(alpha: isDark ? 0.28 : 0.06),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Flexible(
+              child: Text(
+                currentLabel,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  color: LiquidTokens.ink(context),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              CupertinoIcons.chevron_down,
+              size: 15,
+              color: LiquidTokens.muted(context),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LiquidPillSelectSheet<T> extends StatefulWidget {
+  final List<({T value, String label})> items;
+  final T value;
+  final String title;
+
+  const _LiquidPillSelectSheet({
+    required this.items,
+    required this.value,
+    required this.title,
+  });
+
+  @override
+  State<_LiquidPillSelectSheet<T>> createState() => _LiquidPillSelectSheetState<T>();
+}
+
+class _LiquidPillSelectSheetState<T> extends State<_LiquidPillSelectSheet<T>> {
+  static const double _itemExtent = 48.0;
+  ScrollController? _scrollCtrl;
+
+  double _computeListHeight(BuildContext context) {
+    final screenH = MediaQuery.sizeOf(context).height;
+    final maxH = (screenH * 0.52).clamp(220.0, 440.0);
+    final contentH = widget.items.length * _itemExtent + 8.0;
+    return contentH < maxH ? contentH.clamp(_itemExtent + 8.0, maxH) : maxH;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_scrollCtrl == null) {
+      final listHeight = _computeListHeight(context);
+      final viewportH = (listHeight - 8.0).clamp(_itemExtent, listHeight);
+      final selectedIdx = widget.items.indexWhere((e) => e.value == widget.value);
+      final totalHeight = widget.items.length * _itemExtent;
+      final maxScroll = (totalHeight - viewportH).clamp(0.0, double.infinity);
+      final initialOffset = selectedIdx >= 0
+          ? (selectedIdx * _itemExtent - viewportH / 2 + _itemExtent / 2).clamp(0.0, maxScroll)
+          : 0.0;
+      _scrollCtrl = ScrollController(initialScrollOffset: initialOffset);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollCtrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final listHeight = _computeListHeight(context);
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(LiquidTokens.radiusSheet)),
+      child: LiquidGlassSurface(
+        variant: LiquidGlassVariant.tinted,
+        borderRadius: LiquidTokens.radiusSheet,
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: LiquidTokens.separator(context),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: LiquidTokens.ink(context),
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: LiquidTokens.accentSoft(context),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '完成',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: LiquidTokens.accentStrong(context),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: listHeight,
+                child: LiquidSolidCard(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(LiquidTokens.radiusCard - 4),
+                    child: ListView.builder(
+                      controller: _scrollCtrl,
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      physics: const BouncingScrollPhysics(),
+                      itemExtent: _itemExtent,
+                      itemCount: widget.items.length,
+                      itemBuilder: (ctx, idx) {
+                        final item = widget.items[idx];
+                        final active = item.value == widget.value;
+                        return GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () => Navigator.pop(ctx, item.value),
+                          child: Container(
+                            margin: const EdgeInsets.symmetric(vertical: 2),
+                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                            decoration: BoxDecoration(
+                              color: active ? LiquidTokens.accentSoft(ctx) : null,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    item.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                                      color: active
+                                          ? LiquidTokens.accentStrong(ctx)
+                                          : LiquidTokens.ink(ctx),
+                                    ),
+                                  ),
+                                ),
+                                if (active) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    CupertinoIcons.check_mark,
+                                    size: 16,
+                                    color: LiquidTokens.accentStrong(ctx),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Floating Liquid Glass Capsule Bottom Navigation Bar with spring-sliding active pill.
 class LiquidCapsuleNavBar extends StatefulWidget {
   final int currentIndex;

@@ -3,9 +3,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jmcomic-panel-server"
+name = "jmlis-server"
 version = "2.0.0"
-description = "JMComic Panel Local/LAN Backend Server (FastAPI + SQLite + JMComic)"
+description = "JMlis Local/LAN Backend Server (FastAPI + SQLite + JMComic)"
 requires-python = ">=3.10"
 dependencies = [
     "jmcomic>=2.6.20",

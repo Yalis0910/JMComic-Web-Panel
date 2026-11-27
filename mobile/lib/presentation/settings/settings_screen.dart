@@ -395,21 +395,20 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                               ),
                             );
                             final probe = await ctrl.probeAndSwitch();
-                            if (mounted) {
-                              showCupertinoDialog(
-                                context: context,
-                                builder: (ctx) => CupertinoAlertDialog(
-                                  title: Text(probe.lanReachable ? '连接成功' : '探测结果'),
-                                  content: Text(probe.message),
-                                  actions: [
-                                    CupertinoDialogAction(
-                                      child: const Text('好'),
-                                      onPressed: () => Navigator.pop(ctx),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
+                            if (!mounted) return;
+                            showCupertinoDialog(
+                              context: this.context,
+                              builder: (ctx) => CupertinoAlertDialog(
+                                title: Text(probe.lanReachable ? '连接成功' : '探测结果'),
+                                content: Text(probe.message),
+                                actions: [
+                                  CupertinoDialogAction(
+                                    child: const Text('好'),
+                                    onPressed: () => Navigator.pop(ctx),
+                                  ),
+                                ],
+                              ),
+                            );
                           },
                         ),
                       ],
@@ -611,10 +610,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   );
                                   return;
                                 }
-                                final nextEnabled = parsed != null && state.settings.proxyEnabled;
+                                final ParsedProxyConfig? activeProxy =
+                                    state.settings.proxyEnabled ? parsed : null;
                                 await ctrl.updateSettings(
                                   state.settings.copyWith(
-                                    proxyEnabled: nextEnabled,
+                                    proxyEnabled: activeProxy != null,
                                     proxyUrl: rawUrl,
                                     proxyUsername: _proxyUserCtrl.text.trim(),
                                     proxyPassword: _proxyPassCtrl.text,
@@ -626,8 +626,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                   builder: (ctx) => CupertinoAlertDialog(
                                     title: const Text('代理配置已保存'),
                                     content: Text(
-                                      nextEnabled && parsed != null
-                                          ? '已启用代理：${parsed.scheme}://${parsed.host}:${parsed.port}'
+                                      activeProxy != null
+                                          ? '已启用代理：${activeProxy.scheme}://${activeProxy.host}:${activeProxy.port}'
                                           : '配置已保存；当前代理开关为关闭状态（仍走直连）。',
                                     ),
                                     actions: [

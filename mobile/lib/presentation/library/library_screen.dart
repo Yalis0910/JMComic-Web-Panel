@@ -306,11 +306,17 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> {
           ),
           CupertinoSliverRefreshControl(
             onRefresh: () async {
-              if (currentTab == 'fav') await _loadFavorites(forceRefresh: true);
-              else if (currentTab == 'shelves') await _loadShelves();
-              else if (currentTab == 'offline') await _loadOffline();
-              else if (currentTab == 'lan_lib') await _loadLanLibrary(scan: true);
-              else if (currentTab == 'downloads') await _loadDownloads();
+              if (currentTab == 'fav') {
+                await _loadFavorites(forceRefresh: true);
+              } else if (currentTab == 'shelves') {
+                await _loadShelves();
+              } else if (currentTab == 'offline') {
+                await _loadOffline();
+              } else if (currentTab == 'lan_lib') {
+                await _loadLanLibrary(scan: true);
+              } else if (currentTab == 'downloads') {
+                await _loadDownloads();
+              }
             },
           ),
           SliverToBoxAdapter(
